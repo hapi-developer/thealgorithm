@@ -3,147 +3,25 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Dodge &amp; Collect — Adaptive Experience Demo</title>
+  <title>Driftline</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <header class="app-header">
-    <div>
-      <h1>Dodge &amp; Collect</h1>
-      <p class="subtitle">Adaptive Experience Engine Demo</p>
+  <canvas id="driftCanvas" aria-label="Driftline game canvas"></canvas>
+  <div class="hud" aria-live="polite">
+    <div class="hud-item">
+      <span class="hud-label">Score</span>
+      <span id="scoreValue" class="hud-value">0</span>
     </div>
-    <div class="header-actions">
-      <button id="howItWorksBtn" class="ghost">How it works</button>
-      <button id="resetBtn" class="danger">Reset Model</button>
+    <div class="hud-item">
+      <span class="hud-label">Combo</span>
+      <span id="comboValue" class="hud-value">x1</span>
     </div>
-  </header>
-
-  <main class="layout">
-    <section class="game-panel">
-      <div class="canvas-wrap">
-        <canvas id="gameCanvas" width="760" height="520" aria-label="Game area"></canvas>
-        <div class="tooltip" id="onboardingTip">This adapts to your play style.</div>
-        <div class="help-hint">WASD / Arrows to move</div>
-        <div class="hud">
-          <div>Score: <span id="scoreValue">0</span></div>
-          <div>Round: <span id="roundValue">1</span></div>
-          <div>Time: <span id="timeValue">0</span>s</div>
-        </div>
-      </div>
-    </section>
-
-    <aside class="dashboard">
-      <div class="card">
-        <h2>Player Model</h2>
-        <div class="metric">
-          <span>Skill</span>
-          <div class="bar"><span id="skillBar"></span></div>
-          <span id="skillValue" class="value">0.50</span>
-        </div>
-        <div class="metric">
-          <span>Focus</span>
-          <div class="bar"><span id="focusBar"></span></div>
-          <span id="focusValue" class="value">0.50</span>
-        </div>
-        <div class="metric">
-          <span>Fatigue</span>
-          <div class="bar"><span id="fatigueBar"></span></div>
-          <span id="fatigueValue" class="value">0.10</span>
-        </div>
-        <div class="metric">
-          <span>Preferences</span>
-          <div class="tag-row" id="prefTags"></div>
-        </div>
-        <div class="metric">
-          <span>Novelty Tolerance</span>
-          <div class="bar"><span id="noveltyBar"></span></div>
-          <span id="noveltyValue" class="value">0.50</span>
-        </div>
-      </div>
-
-      <div class="card">
-        <h2>Current Tuning</h2>
-        <div id="tuningList" class="list"></div>
-      </div>
-
-      <div class="card">
-        <h2>Why did it choose this?</h2>
-        <p id="rationaleText" class="muted"></p>
-        <div class="small-list" id="signalList"></div>
-      </div>
-
-      <div class="card">
-        <h2>New Mode Ideas</h2>
-        <div id="ideasList" class="ideas"></div>
-      </div>
-
-      <div class="card">
-        <h2>Settings</h2>
-        <label class="toggle">
-          <input type="checkbox" id="personalizationToggle" checked />
-          <span>Personalization</span>
-        </label>
-        <label class="toggle">
-          <input type="checkbox" id="reducedMotionToggle" />
-          <span>Reduced motion</span>
-        </label>
-        <label class="toggle">
-          <input type="checkbox" id="breakToggle" checked />
-          <span>Break nudges</span>
-        </label>
-        <div class="setting-row">
-          <label for="breakMinutes">Break after (minutes)</label>
-          <input id="breakMinutes" type="number" min="2" max="60" value="10" />
-        </div>
-      </div>
-
-      <div class="card">
-        <h2>Round Summary</h2>
-        <div id="rewardTrend" class="muted"></div>
-        <div id="roundSummary" class="small-list"></div>
-      </div>
-    </aside>
-  </main>
-
-  <div class="modal" id="breakModal" aria-hidden="true">
-    <div class="modal-content">
-      <h3>Time for a quick break?</h3>
-      <p>Your focus is valuable. A short break can keep play healthy and fun.</p>
-      <div class="modal-actions">
-        <button id="snoozeBtn" class="ghost">Snooze 5 min</button>
-        <button id="closeBreakBtn">I’ll take a break</button>
-      </div>
+    <div class="hud-item">
+      <span class="hud-label">Phase</span>
+      <span id="phaseValue" class="hud-value">Spiral Drift</span>
     </div>
   </div>
-
-  <div class="modal" id="funModal" aria-hidden="true">
-    <div class="modal-content">
-      <h3>How fun was that round?</h3>
-      <p class="muted">Optional quick check-in. Your answer helps tune the experience.</p>
-      <div class="rating-row" id="funButtons"></div>
-    </div>
-  </div>
-
-  <div class="modal" id="howModal" aria-hidden="true">
-    <div class="modal-content wide">
-      <h3>How the Adaptive Experience Engine works</h3>
-      <p>
-        This demo tracks only gameplay signals (no network calls, no external models). It
-        estimates your current skill, focus, fatigue, and preferences, then selects a
-        difficulty “packet” each round using a safe exploration policy. When fatigue is high,
-        it slows things down, adds rest rounds, and avoids raising difficulty.
-      </p>
-      <ul>
-        <li>Signals are summarized locally and stored in your browser.</li>
-        <li>Personalization can be turned off at any time.</li>
-        <li>Break nudges encourage healthy engagement.</li>
-      </ul>
-      <div class="modal-actions">
-        <button id="closeHowBtn">Got it</button>
-      </div>
-    </div>
-  </div>
-
   <script src="script.js"></script>
 </body>
 </html>

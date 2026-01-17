@@ -1,135 +1,80 @@
-/*
-  Dodge & Collect — Adaptive Experience Engine Demo
-  All logic runs locally. No network requests, no external dependencies.
-*/
-
 (() => {
-  const canvas = document.getElementById("gameCanvas");
+  const canvas = document.getElementById("driftCanvas");
   const ctx = canvas.getContext("2d");
   const scoreValue = document.getElementById("scoreValue");
-  const roundValue = document.getElementById("roundValue");
-  const timeValue = document.getElementById("timeValue");
-  const onboardingTip = document.getElementById("onboardingTip");
-
-  const ui = {
-    skillBar: document.getElementById("skillBar"),
-    focusBar: document.getElementById("focusBar"),
-    fatigueBar: document.getElementById("fatigueBar"),
-    noveltyBar: document.getElementById("noveltyBar"),
-    skillValue: document.getElementById("skillValue"),
-    focusValue: document.getElementById("focusValue"),
-    fatigueValue: document.getElementById("fatigueValue"),
-    noveltyValue: document.getElementById("noveltyValue"),
-    prefTags: document.getElementById("prefTags"),
-    tuningList: document.getElementById("tuningList"),
-    rationaleText: document.getElementById("rationaleText"),
-    signalList: document.getElementById("signalList"),
-    ideasList: document.getElementById("ideasList"),
-    roundSummary: document.getElementById("roundSummary"),
-    rewardTrend: document.getElementById("rewardTrend"),
-    personalizationToggle: document.getElementById("personalizationToggle"),
-    reducedMotionToggle: document.getElementById("reducedMotionToggle"),
-    breakToggle: document.getElementById("breakToggle"),
-    breakMinutes: document.getElementById("breakMinutes"),
-    breakModal: document.getElementById("breakModal"),
-    snoozeBtn: document.getElementById("snoozeBtn"),
-    closeBreakBtn: document.getElementById("closeBreakBtn"),
-    funModal: document.getElementById("funModal"),
-    funButtons: document.getElementById("funButtons"),
-    howModal: document.getElementById("howModal"),
-    howItWorksBtn: document.getElementById("howItWorksBtn"),
-    closeHowBtn: document.getElementById("closeHowBtn"),
-    resetBtn: document.getElementById("resetBtn"),
-  };
+  const comboValue = document.getElementById("comboValue");
+  const phaseValue = document.getElementById("phaseValue");
 
   const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
   const lerp = (a, b, t) => a + (b - a) * t;
   const rand = (min, max) => Math.random() * (max - min) + min;
+  const randInt = (min, max) => Math.floor(rand(min, max));
+  const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 
-  const storageKey = "adaptive-experience-engine-v1";
+  const storageKey = "driftline-adaptive-v1";
+  const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+  let reducedMotion = prefersReducedMotion.matches;
+  prefersReducedMotion.addEventListener("change", (event) => {
+    reducedMotion = event.matches;
+  });
+
+  const input = {
+    up: false,
+    down: false,
+    left: false,
+    right: false,
+  };
 
   const engine = {
     state: null,
-    events: [],
-    armStats: {},
-    arms: [],
-    ideaArchive: [],
+    lastSave: 0,
     init() {
-      this.arms = generateArms();
-      const stored = this.load();
-      this.state = stored?.state || createInitialState();
-      this.armStats = stored?.armStats || initArmStats(this.arms);
-      this.ideaArchive = stored?.ideaArchive || [];
+      this.state = this.load() || createInitialEngineState();
     },
-    track(eventName, payload = {}) {
-      const event = { name: eventName, payload, time: performance.now() };
-      this.events.push(event);
-      if (this.events.length > 200) {
-        this.events.shift();
-      }
+    updateEmbedding(metrics) {
+      const embed = this.state.playerEmbedding;
+      embed.controlSmoothness = lerp(embed.controlSmoothness, metrics.smoothness, 0.15);
+      embed.reactionMargin = lerp(embed.reactionMargin, metrics.reactionMargin, 0.2);
+      embed.riskBias = lerp(embed.riskBias, metrics.riskBias, 0.2);
+      embed.explorationRate = lerp(embed.explorationRate, metrics.explorationRate, 0.2);
+      embed.patternComprehension = lerp(embed.patternComprehension, metrics.patternComprehension, 0.18);
+      embed.enduranceState = lerp(embed.enduranceState, metrics.enduranceState, 0.15);
     },
-    summarizeRound(summary) {
-      const { playerModel } = this.state;
-      updatePlayerModel(playerModel, summary);
-      this.state.roundHistory.unshift(summary);
-      this.state.roundHistory = this.state.roundHistory.slice(0, 6);
+    updateModel(features, outcome) {
+      const weights = this.state.modelWeights;
+      const learningRate = 0.08;
+      const predicted = dot(weights, features);
+      const error = outcome - predicted;
+      weights.forEach((_, index) => {
+        weights[index] = clamp(weights[index] + learningRate * error * features[index], -2, 2);
+      });
     },
-    chooseExperience(context) {
-      if (!this.state.personalizationEnabled) {
-        return this.arms.find((arm) => arm.id === "stable-medium");
-      }
+    evaluate(metrics) {
+      this.updateEmbedding(metrics);
+      const features = buildFeatureVector(this.state.playerEmbedding, this.state.experience);
+      this.updateModel(features, metrics.engagementScore);
 
-      const fatigue = this.state.playerModel.fatigue.value;
-      const totalPlays = Object.values(this.armStats).reduce((sum, arm) => sum + arm.count, 0);
+      const candidates = buildCandidates(this.state.experience);
+      const scored = candidates.map((candidate) => {
+        const score = scoreCandidate(candidate, this.state, metrics);
+        return { candidate, score };
+      });
 
-      let bestArm = this.arms[0];
-      let bestScore = -Infinity;
+      scored.sort((a, b) => b.score - a.score);
+      const chosen = scored[0].candidate;
+      this.state.experience = chosen;
+      this.state.experienceHistory.unshift(experienceVector(chosen));
+      this.state.experienceHistory = this.state.experienceHistory.slice(0, 12);
 
-      for (const arm of this.arms) {
-        const stats = this.armStats[arm.id];
-        const mean = stats.mean;
-        const exploration = stats.count < 1 ? 1.2 : Math.sqrt(Math.log(totalPlays + 1) / (stats.count + 1));
-        const noveltyPenalty = getRecencyPenalty(this.state.recentArms, arm.id);
-        const preferenceFit = getPreferenceFit(arm, this.state.playerModel.prefs);
-
-        let score = mean + exploration * (0.6 + (1 - fatigue) * 0.6) + preferenceFit * 0.3 - noveltyPenalty;
-        if (fatigue > 0.7 && arm.tier === "hard") {
-          score -= 1.5;
-        }
-        if (fatigue > 0.6 && arm.restRound) {
-          score += 0.7;
-        }
-        if (context.sessionSeconds < 60 && arm.tier === "hard") {
-          score -= 0.5;
-        }
-        if (score > bestScore) {
-          bestScore = score;
-          bestArm = arm;
-        }
-      }
-
-      return bestArm;
-    },
-    applyExperience(packet) {
-      this.state.currentArm = packet;
-      this.state.recentArms.unshift(packet.id);
-      this.state.recentArms = this.state.recentArms.slice(0, 6);
-    },
-    recordReward(armId, reward) {
-      const stats = this.armStats[armId];
-      stats.count += 1;
-      const delta = reward - stats.mean;
-      stats.mean += delta / stats.count;
-      stats.variance = lerp(stats.variance, delta * delta, 0.2);
-      this.state.rewardTrend = lerp(this.state.rewardTrend, reward, 0.3);
+      updateMechanics(this.state, metrics);
+      this.save();
+      return chosen;
     },
     save() {
-      const payload = {
-        state: this.state,
-        armStats: this.armStats,
-        ideaArchive: this.ideaArchive,
-      };
-      localStorage.setItem(storageKey, JSON.stringify(payload));
+      const now = performance.now();
+      if (now - this.lastSave < 4000) return;
+      this.lastSave = now;
+      localStorage.setItem(storageKey, JSON.stringify(this.state));
     },
     load() {
       const raw = localStorage.getItem(storageKey);
@@ -140,886 +85,809 @@
         return null;
       }
     },
-    reset() {
-      localStorage.removeItem(storageKey);
-      this.init();
-    },
   };
 
   const game = {
+    width: 0,
+    height: 0,
+    lastFrame: performance.now(),
     player: {
       x: 0,
       y: 0,
       vx: 0,
       vy: 0,
       radius: 10,
-      speed: 180,
+      glow: 0,
+      drift: 1,
     },
-    hazards: [],
-    coins: [],
-    particles: [],
     score: 0,
-    streak: 0,
-    streakTimer: 0,
-    round: 1,
-    roundTime: 0,
-    roundLength: 40,
-    lastFrame: performance.now(),
-    lastRoundEnd: performance.now(),
-    sessionStart: performance.now(),
-    lastInputTime: performance.now(),
-    spawnTimer: 0,
-    coinTimer: 0,
-    nearMisses: 0,
-    collisions: 0,
-    collected: 0,
-    coinsSpawned: 0,
-    reactionSamples: [],
-    inputSamples: [],
-    roundActive: true,
-    activePacket: null,
-    reducedMotion: false,
-    shakeTime: 0,
+    combo: 1,
+    comboTimer: 0,
+    phaseName: "Spiral Drift",
+    pulses: [],
+    orbiters: [],
+    lattices: [],
+    sparks: [],
+    trails: [],
+    metricsWindow: createMetricsWindow(),
+    lastAdaptiveTick: performance.now(),
+    targetExperience: null,
+    currentExperience: null,
   };
 
-  const input = {
-    up: false,
-    down: false,
-    left: false,
-    right: false,
-  };
-
-  const defaultPacket = {
-    id: "stable-medium",
-    tier: "medium",
-    rewardDensity: "normal",
-    chaos: "low",
-    novelty: "medium",
-    restRound: false,
-    params: {
-      hazardSpawn: 1.2,
-      hazardSpeed: 120,
-      hazardSize: 14,
-      hazardPattern: 0.3,
-      coinSpawn: 1.0,
-      coinValue: 10,
-      streakWindow: 6,
-      friction: 0.92,
-      playerSpeed: 180,
-      shake: 0.2,
-      roundLength: 40,
-      intensityRamp: 1.0,
-    },
-  };
-
-  function createInitialState() {
+  function createInitialEngineState() {
     return {
-      playerModel: {
-        skill: createEstimate(0.5),
-        focus: createEstimate(0.55),
-        fatigue: createEstimate(0.1),
-        noveltyTolerance: createEstimate(0.5),
-        prefs: {
-          speed: 0.5,
-          precision: 0.5,
-          risk: 0.5,
-          exploration: 0.5,
+      playerEmbedding: {
+        controlSmoothness: 0.6,
+        reactionMargin: 0.6,
+        riskBias: 0.4,
+        explorationRate: 0.5,
+        patternComprehension: 0.6,
+        enduranceState: 0.6,
+      },
+      experience: {
+        enemyTopology: "spiral",
+        patternSymmetry: 3,
+        temporalRhythm: 1.0,
+        visualDensity: 0.9,
+        colorDynamics: 0.4,
+        rewardStructure: 0.6,
+        cameraBehavior: 0.3,
+        ruleMutations: {
+          mirror: 0.2,
+          curveSpace: 0.2,
+          timeDilation: 0.1,
+          precisionScoring: 0.3,
         },
       },
-      personalizationEnabled: true,
-      reducedMotion: false,
-      breakNudges: true,
-      rewardTrend: 0.5,
-      roundHistory: [],
-      recentArms: [],
-      currentArm: defaultPacket,
-      lastBreakTime: performance.now(),
-      breakMinutes: 10,
-    };
-  }
-
-  function createEstimate(value) {
-    return { value, variance: 0.1 };
-  }
-
-  function updateEstimate(estimate, sample, alpha = 0.2) {
-    const delta = sample - estimate.value;
-    estimate.value = clamp(estimate.value + delta * alpha, 0, 1);
-    estimate.variance = lerp(estimate.variance, delta * delta, 0.2);
-  }
-
-  function updatePlayerModel(model, summary) {
-    const successRate = summary.coinsCollected / Math.max(1, summary.coinsSpawned);
-    const avoidance = 1 - summary.collisionRate;
-    const smoothness = summary.smoothness;
-    const reaction = summary.reactionScore;
-
-    updateEstimate(model.skill, clamp((successRate + avoidance + reaction) / 3, 0, 1));
-    updateEstimate(model.focus, clamp((smoothness + reaction) / 2, 0, 1));
-
-    const fatigueSignal = clamp(summary.fatigueSignal, 0, 1);
-    updateEstimate(model.fatigue, fatigueSignal, 0.12);
-
-    const noveltyDrop = summary.repetitionPenalty;
-    updateEstimate(model.noveltyTolerance, 1 - noveltyDrop, 0.12);
-
-    model.prefs.speed = clamp(lerp(model.prefs.speed, summary.prefSignals.speed, 0.2), 0, 1);
-    model.prefs.precision = clamp(lerp(model.prefs.precision, summary.prefSignals.precision, 0.2), 0, 1);
-    model.prefs.risk = clamp(lerp(model.prefs.risk, summary.prefSignals.risk, 0.2), 0, 1);
-    model.prefs.exploration = clamp(lerp(model.prefs.exploration, summary.prefSignals.exploration, 0.2), 0, 1);
-  }
-
-  function generateArms() {
-    const tiers = ["easy", "medium", "hard"];
-    const reward = ["sparse", "normal", "dense"];
-    const chaos = ["low", "high"];
-    const novelty = ["low", "medium", "high"];
-    const arms = [];
-
-    let id = 0;
-    for (const tier of tiers) {
-      for (const rewardDensity of reward) {
-        for (const chaosLevel of chaos) {
-          if (arms.length >= 18) break;
-          const noveltyLevel = novelty[id % novelty.length];
-          arms.push(buildArm({
-            id: `arm-${id++}`,
-            tier,
-            rewardDensity,
-            chaos: chaosLevel,
-            novelty: noveltyLevel,
-            restRound: false,
-          }));
-        }
-      }
-    }
-
-    arms.push(buildArm({
-      id: "rest-1",
-      tier: "easy",
-      rewardDensity: "dense",
-      chaos: "low",
-      novelty: "low",
-      restRound: true,
-    }));
-    arms.push(buildArm({
-      id: "rest-2",
-      tier: "easy",
-      rewardDensity: "normal",
-      chaos: "low",
-      novelty: "medium",
-      restRound: true,
-    }));
-    arms.push(defaultPacket);
-
-    return arms;
-  }
-
-  function buildArm({ id, tier, rewardDensity, chaos, novelty, restRound }) {
-    const tierMultiplier = tier === "easy" ? 0.8 : tier === "hard" ? 1.2 : 1.0;
-    const chaosMultiplier = chaos === "high" ? 1.2 : 0.9;
-    const rewardMultiplier = rewardDensity === "dense" ? 1.3 : rewardDensity === "sparse" ? 0.8 : 1.0;
-
-    return {
-      id,
-      tier,
-      rewardDensity,
-      chaos,
-      novelty,
-      restRound,
-      params: {
-        hazardSpawn: 1.0 * tierMultiplier * chaosMultiplier,
-        hazardSpeed: 110 * tierMultiplier * chaosMultiplier,
-        hazardSize: 14 * tierMultiplier,
-        hazardPattern: chaos === "high" ? 0.65 : 0.35,
-        coinSpawn: 1.1 * rewardMultiplier,
-        coinValue: rewardDensity === "dense" ? 9 : rewardDensity === "sparse" ? 12 : 10,
-        streakWindow: rewardDensity === "sparse" ? 5 : 7,
-        friction: restRound ? 0.95 : 0.9,
-        playerSpeed: 170 * (restRound ? 0.9 : 1.0),
-        shake: chaos === "high" ? 0.4 : 0.2,
-        roundLength: restRound ? 30 : 40,
-        intensityRamp: restRound ? 0.7 : 1.1,
+      modelWeights: new Array(1 + 6 + 8).fill(0).map(() => rand(-0.4, 0.4)),
+      experienceHistory: [],
+      mechanics: {
+        mirror: 0.2,
+        curveSpace: 0.2,
+        timeDilation: 0.1,
+        precisionScoring: 0.3,
       },
     };
   }
 
-  function initArmStats(arms) {
-    const stats = {};
-    for (const arm of arms) {
-      stats[arm.id] = { count: 0, mean: 0.5, variance: 0.1 };
-    }
-    return stats;
-  }
-
-  function getRecencyPenalty(recentArms, armId) {
-    const index = recentArms.indexOf(armId);
-    if (index === -1) return 0;
-    return (6 - index) * 0.05;
-  }
-
-  function getPreferenceFit(arm, prefs) {
-    const speedWeight = arm.chaos === "high" ? 1 : 0.5;
-    const precisionWeight = arm.rewardDensity === "sparse" ? 0.8 : 0.4;
-    const riskWeight = arm.tier === "hard" ? 1 : 0.4;
-    const explorationWeight = arm.novelty === "high" ? 1 : 0.3;
-    return (
-      prefs.speed * speedWeight +
-      prefs.precision * precisionWeight +
-      prefs.risk * riskWeight +
-      prefs.exploration * explorationWeight
-    ) / 2.6;
-  }
-
-  function createIdeaGenerator() {
-    const adjectives = ["swift", "precision", "arcade", "zen", "chaotic", "drift"];
-    const modifiers = ["pulse", "orbit", "spiral", "streak", "echo", "glide"];
-    const ruleChanges = [
-      "hazards ripple outward in waves",
-      "coins appear in mirrored pairs",
-      "safe zones drift across the arena",
-      "hazards slow down near the center",
-      "coins boost speed for a moment",
-      "edges are slick and bouncy",
+  function buildFeatureVector(embedding, experience) {
+    return [
+      1,
+      embedding.controlSmoothness,
+      embedding.reactionMargin,
+      embedding.riskBias,
+      embedding.explorationRate,
+      embedding.patternComprehension,
+      embedding.enduranceState,
+      experience.patternSymmetry / 6,
+      experience.temporalRhythm / 1.6,
+      experience.visualDensity / 1.6,
+      experience.colorDynamics,
+      experience.rewardStructure,
+      experience.cameraBehavior,
+      experience.ruleMutations.mirror,
+      experience.ruleMutations.curveSpace,
     ];
+  }
 
-    return () => {
-      const genome = {
-        pattern: rand(0, 1),
-        speedCurve: rand(0, 1),
-        coinRule: rand(0, 1),
-        arenaMod: rand(0, 1),
-        theme: rand(0, 1),
-      };
-      const ideaText = `Try a ${pick(adjectives)} ${pick(modifiers)} mode where ${pick(ruleChanges)}.`;
-      return { id: `idea-${Date.now()}-${Math.floor(Math.random() * 1000)}`, genome, text: ideaText };
+  function scoreCandidate(candidate, state, metrics) {
+    const features = buildFeatureVector(state.playerEmbedding, candidate);
+    const predictedEngagement = dot(state.modelWeights, features);
+    const mastery = state.playerEmbedding.patternComprehension * 0.6 + state.playerEmbedding.controlSmoothness * 0.4;
+    const aesthetic = 0.3 + candidate.colorDynamics * 0.5 + candidate.patternSymmetry / 8;
+
+    const novelty = noveltyScore(candidate, state.experienceHistory);
+    const frustration = metrics.collisionRate * 1.4 + (1 - metrics.reactionMargin) * 0.4;
+    const load = candidate.visualDensity * 0.7 + candidate.temporalRhythm * 0.4;
+
+    const noveltyPenalty = novelty < 0.18 ? (0.18 - novelty) * 1.5 : 0;
+    const frustrationPenalty = frustration > 0.55 ? (frustration - 0.55) * 1.4 : 0;
+    const loadPenalty = load > 1.35 ? (load - 1.35) * 1.2 : 0;
+
+    return predictedEngagement + mastery + aesthetic + novelty - noveltyPenalty - frustrationPenalty - loadPenalty;
+  }
+
+  function noveltyScore(candidate, history) {
+    if (!history.length) return 0.4;
+    const vector = experienceVector(candidate);
+    const distances = history.map((entry) => vectorDistance(vector, entry));
+    const avg = distances.reduce((sum, value) => sum + value, 0) / distances.length;
+    return avg;
+  }
+
+  function experienceVector(exp) {
+    return [
+      topologyIndex(exp.enemyTopology) / 4,
+      exp.patternSymmetry / 6,
+      exp.temporalRhythm / 1.6,
+      exp.visualDensity / 1.6,
+      exp.colorDynamics,
+      exp.rewardStructure,
+      exp.cameraBehavior,
+      exp.ruleMutations.mirror,
+      exp.ruleMutations.curveSpace,
+      exp.ruleMutations.timeDilation,
+      exp.ruleMutations.precisionScoring,
+    ];
+  }
+
+  function vectorDistance(a, b) {
+    const diff = a.reduce((sum, value, index) => sum + Math.abs(value - b[index]), 0);
+    return diff / a.length;
+  }
+
+  function topologyIndex(name) {
+    return ["spiral", "pulse", "lattice", "orbit", "mirror"].indexOf(name);
+  }
+
+  function buildCandidates(current) {
+    const candidates = [current];
+    const topologies = ["spiral", "pulse", "lattice", "orbit", "mirror"];
+    for (let i = 0; i < 6; i += 1) {
+      const clone = JSON.parse(JSON.stringify(current));
+      if (Math.random() < 0.3) {
+        clone.enemyTopology = topologies[randInt(0, topologies.length)];
+      }
+      clone.patternSymmetry = clamp(clone.patternSymmetry + rand(-1.2, 1.2), 2, 6);
+      clone.temporalRhythm = clamp(clone.temporalRhythm + rand(-0.2, 0.25), 0.7, 1.6);
+      clone.visualDensity = clamp(clone.visualDensity + rand(-0.2, 0.3), 0.6, 1.6);
+      clone.colorDynamics = clamp(clone.colorDynamics + rand(-0.15, 0.2), 0.1, 1);
+      clone.rewardStructure = clamp(clone.rewardStructure + rand(-0.15, 0.2), 0.3, 1);
+      clone.cameraBehavior = clamp(clone.cameraBehavior + rand(-0.1, 0.15), 0, 1);
+      clone.ruleMutations.mirror = clamp(clone.ruleMutations.mirror + rand(-0.1, 0.12), 0, 1);
+      clone.ruleMutations.curveSpace = clamp(clone.ruleMutations.curveSpace + rand(-0.1, 0.12), 0, 1);
+      clone.ruleMutations.timeDilation = clamp(clone.ruleMutations.timeDilation + rand(-0.08, 0.1), 0, 1);
+      clone.ruleMutations.precisionScoring = clamp(clone.ruleMutations.precisionScoring + rand(-0.1, 0.12), 0, 1);
+      candidates.push(clone);
+    }
+    return candidates;
+  }
+
+  function updateMechanics(state, metrics) {
+    const mechanics = state.mechanics;
+    mechanics.mirror = clamp(lerp(mechanics.mirror, metrics.riskBias, 0.12), 0, 1);
+    mechanics.curveSpace = clamp(lerp(mechanics.curveSpace, metrics.explorationRate, 0.1), 0, 1);
+    mechanics.timeDilation = clamp(lerp(mechanics.timeDilation, 1 - metrics.reactionMargin, 0.1), 0, 1);
+    mechanics.precisionScoring = clamp(lerp(mechanics.precisionScoring, metrics.smoothness, 0.1), 0, 1);
+
+    state.experience.ruleMutations.mirror = mechanics.mirror;
+    state.experience.ruleMutations.curveSpace = mechanics.curveSpace;
+    state.experience.ruleMutations.timeDilation = mechanics.timeDilation;
+    state.experience.ruleMutations.precisionScoring = mechanics.precisionScoring;
+  }
+
+  function dot(a, b) {
+    return a.reduce((sum, value, index) => sum + value * b[index], 0);
+  }
+
+  function createMetricsWindow() {
+    return {
+      time: 0,
+      collisions: 0,
+      nearMisses: 0,
+      hazardChecks: 0,
+      smoothnessSamples: [],
+      reactionSamples: [],
+      explorationCells: new Set(),
+      scoreGains: 0,
+      comboGains: 0,
     };
   }
 
-  function pick(list) {
-    return list[Math.floor(Math.random() * list.length)];
-  }
-
-  const generateIdea = createIdeaGenerator();
-
-  function scoreIdea(genome, prefs, archive) {
-    const novelty = archive.length === 0 ? 1 : Math.min(1, averageDistance(genome, archive));
-    const preferenceFit = (prefs.exploration + prefs.speed * genome.speedCurve + prefs.risk * genome.pattern) / 3;
-    return 0.6 * novelty + 0.4 * preferenceFit;
-  }
-
-  function averageDistance(genome, archive) {
-    const distances = archive.map((entry) => genomeDistance(genome, entry));
-    const sum = distances.reduce((acc, d) => acc + d, 0);
-    return sum / distances.length;
-  }
-
-  function genomeDistance(a, b) {
-    const keys = Object.keys(a);
-    const diff = keys.reduce((acc, key) => acc + Math.abs(a[key] - b[key]), 0);
-    return diff / keys.length;
-  }
-
-  function openModal(modal) {
-    modal.classList.add("active");
-    modal.setAttribute("aria-hidden", "false");
-  }
-
-  function closeModal(modal) {
-    modal.classList.remove("active");
-    modal.setAttribute("aria-hidden", "true");
+  function resize() {
+    const ratio = window.devicePixelRatio || 1;
+    canvas.width = window.innerWidth * ratio;
+    canvas.height = window.innerHeight * ratio;
+    canvas.style.width = `${window.innerWidth}px`;
+    canvas.style.height = `${window.innerHeight}px`;
+    ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+    game.width = window.innerWidth;
+    game.height = window.innerHeight;
   }
 
   function setupInput() {
-    const setInput = (key, value) => {
+    const setKey = (key, value) => {
       if (key === "ArrowUp" || key === "w" || key === "W") input.up = value;
       if (key === "ArrowDown" || key === "s" || key === "S") input.down = value;
       if (key === "ArrowLeft" || key === "a" || key === "A") input.left = value;
       if (key === "ArrowRight" || key === "d" || key === "D") input.right = value;
     };
 
-    window.addEventListener("keydown", (event) => {
-      setInput(event.key, true);
-      engine.track("input", { key: event.key });
-      game.lastInputTime = performance.now();
-    });
-    window.addEventListener("keyup", (event) => {
-      setInput(event.key, false);
-      game.lastInputTime = performance.now();
-    });
+    window.addEventListener("keydown", (event) => setKey(event.key, true));
+    window.addEventListener("keyup", (event) => setKey(event.key, false));
   }
 
-  function resizeCanvas() {
-    const rect = canvas.getBoundingClientRect();
-    canvas.width = rect.width * window.devicePixelRatio;
-    canvas.height = rect.height * window.devicePixelRatio;
-    ctx.setTransform(window.devicePixelRatio, 0, 0, window.devicePixelRatio, 0, 0);
-  }
-
-  function initGame() {
+  function initializeGame() {
     engine.init();
-    resizeCanvas();
+    resize();
     setupInput();
-    window.addEventListener("resize", resizeCanvas);
-    window.addEventListener("beforeunload", () => engine.track("session_end", {}));
-    initializePlayer();
-    setupUi();
-    startRound(engine.state.currentArm || defaultPacket);
+    window.addEventListener("resize", resize);
+
+    game.player.x = game.width / 2;
+    game.player.y = game.height / 2;
+    game.targetExperience = engine.state.experience;
+    game.currentExperience = JSON.parse(JSON.stringify(engine.state.experience));
+    game.phaseName = phaseName(game.currentExperience);
+    phaseValue.textContent = game.phaseName;
+
     requestAnimationFrame(loop);
-    engine.track("session_start", { startedAt: Date.now() });
-  }
-
-  function setupUi() {
-    ui.personalizationToggle.checked = engine.state.personalizationEnabled;
-    ui.reducedMotionToggle.checked = engine.state.reducedMotion;
-    ui.breakToggle.checked = engine.state.breakNudges;
-    ui.breakMinutes.value = engine.state.breakMinutes || 10;
-    game.reducedMotion = engine.state.reducedMotion;
-
-    ui.personalizationToggle.addEventListener("change", () => {
-      engine.state.personalizationEnabled = ui.personalizationToggle.checked;
-      engine.save();
-    });
-
-    ui.reducedMotionToggle.addEventListener("change", () => {
-      engine.state.reducedMotion = ui.reducedMotionToggle.checked;
-      game.reducedMotion = ui.reducedMotionToggle.checked;
-    });
-
-    ui.breakToggle.addEventListener("change", () => {
-      engine.state.breakNudges = ui.breakToggle.checked;
-    });
-
-    ui.breakMinutes.addEventListener("change", () => {
-      engine.state.breakMinutes = parseInt(ui.breakMinutes.value, 10) || 10;
-    });
-
-    ui.snoozeBtn.addEventListener("click", () => {
-      engine.state.lastBreakTime = performance.now();
-      closeModal(ui.breakModal);
-    });
-
-    ui.closeBreakBtn.addEventListener("click", () => {
-      closeModal(ui.breakModal);
-    });
-
-    ui.howItWorksBtn.addEventListener("click", () => openModal(ui.howModal));
-    ui.closeHowBtn.addEventListener("click", () => closeModal(ui.howModal));
-
-    ui.resetBtn.addEventListener("click", () => {
-      engine.reset();
-      initializePlayer();
-      startRound(engine.state.currentArm || defaultPacket);
-    });
-
-    buildFunButtons();
-  }
-
-  function buildFunButtons() {
-    ui.funButtons.innerHTML = "";
-    for (let i = 1; i <= 5; i += 1) {
-      const btn = document.createElement("button");
-      btn.textContent = i;
-      btn.addEventListener("click", () => {
-        engine.track("fun_rating", { rating: i });
-        engine.state.lastFun = i / 5;
-        closeModal(ui.funModal);
-      });
-      ui.funButtons.appendChild(btn);
-    }
-  }
-
-  function initializePlayer() {
-    game.player.x = canvas.clientWidth / 2;
-    game.player.y = canvas.clientHeight / 2;
-    game.player.vx = 0;
-    game.player.vy = 0;
-  }
-
-  function startRound(packet) {
-    game.roundActive = true;
-    game.activePacket = packet;
-    game.roundTime = 0;
-    game.spawnTimer = 0;
-    game.coinTimer = 0;
-    game.nearMisses = 0;
-    game.collisions = 0;
-    game.collected = 0;
-    game.coinsSpawned = 0;
-    game.reactionSamples = [];
-    game.inputSamples = [];
-    game.streakTimer = 0;
-    game.hazards = [];
-    game.coins = [];
-    engine.applyExperience(packet);
-    updateDashboard();
-  }
-
-  function endRound() {
-    game.roundActive = false;
-    const totalTime = game.roundTime;
-    const collisionRate = game.collisions / Math.max(1, totalTime / 10);
-    const reactionScore = average(game.reactionSamples, 0.5);
-    const smoothness = average(game.inputSamples, 0.5);
-    const fatigueSignal = clamp(
-      (performance.now() - game.sessionStart) / 1000 / 900 + collisionRate * 0.5 + (1 - smoothness) * 0.4,
-      0,
-      1
-    );
-
-    const summary = {
-      round: game.round,
-      coinsCollected: game.collected,
-      coinsSpawned: game.coinsSpawned,
-      collisionRate,
-      nearMisses: game.nearMisses,
-      reactionScore,
-      smoothness,
-      fatigueSignal,
-      repetitionPenalty: getRecencyPenalty(engine.state.recentArms, game.activePacket.id),
-      prefSignals: {
-        speed: clamp(game.activePacket.chaos === "high" ? 0.7 : 0.4, 0, 1),
-        precision: clamp(game.activePacket.rewardDensity === "sparse" ? 0.8 : 0.5, 0, 1),
-        risk: clamp(game.activePacket.tier === "hard" ? 0.8 : 0.4, 0, 1),
-        exploration: clamp(game.activePacket.novelty === "high" ? 0.8 : 0.4, 0, 1),
-      },
-    };
-
-    const reward = computeReward(summary);
-    engine.summarizeRound(summary);
-    engine.recordReward(game.activePacket.id, reward);
-    engine.track("round_end", { summary, reward });
-    engine.save();
-
-    updateDashboard();
-    maybePromptFunCheck();
-
-    game.round += 1;
-    roundValue.textContent = game.round;
-    const nextPacket = engine.chooseExperience({
-      sessionSeconds: (performance.now() - game.sessionStart) / 1000,
-    });
-    startRound(flowAdjustPacket(nextPacket));
-  }
-
-  function computeReward(summary) {
-    const flowZone = 1 - Math.abs(summary.collisionRate - 0.25);
-    const improvement = clamp(summary.coinsCollected / 15, 0, 1);
-    const nearMiss = clamp(summary.nearMisses / 10, 0, 1);
-    const frustration = clamp(summary.collisionRate * 1.4, 0, 1);
-    const fatiguePenalty = summary.fatigueSignal * 0.8;
-    const fun = engine.state.lastFun || 0.6;
-    return clamp(flowZone * 0.35 + improvement * 0.25 + nearMiss * 0.1 + fun * 0.2 - frustration * 0.25 - fatiguePenalty * 0.3, 0, 1);
-  }
-
-  function flowAdjustPacket(packet) {
-    const targetSuccess = 0.72;
-    const lastSummary = engine.state.roundHistory[0];
-    if (!lastSummary) return packet;
-
-    const success = lastSummary.coinsCollected / Math.max(1, lastSummary.coinsSpawned);
-    const delta = clamp((targetSuccess - success) * 0.2, -0.15, 0.15);
-
-    const tuned = { ...packet, params: { ...packet.params } };
-    tuned.params.hazardSpawn = clamp(tuned.params.hazardSpawn + delta, 0.6, 2.0);
-    tuned.params.hazardSpeed = clamp(tuned.params.hazardSpeed + delta * 50, 80, 220);
-    tuned.params.coinSpawn = clamp(tuned.params.coinSpawn - delta, 0.6, 1.6);
-    tuned.params.playerSpeed = clamp(tuned.params.playerSpeed + delta * 20, 140, 210);
-    return tuned;
-  }
-
-  function maybePromptFunCheck() {
-    if (game.round % 3 === 0) {
-      openModal(ui.funModal);
-    }
-  }
-
-  function updateDashboard() {
-    const model = engine.state.playerModel;
-    updateMetric(ui.skillBar, ui.skillValue, model.skill.value);
-    updateMetric(ui.focusBar, ui.focusValue, model.focus.value);
-    updateMetric(ui.fatigueBar, ui.fatigueValue, model.fatigue.value);
-    updateMetric(ui.noveltyBar, ui.noveltyValue, model.noveltyTolerance.value);
-
-    ui.prefTags.innerHTML = "";
-    Object.entries(model.prefs).forEach(([key, value]) => {
-      const tag = document.createElement("div");
-      tag.className = "tag";
-      tag.textContent = `${key}: ${(value * 100).toFixed(0)}%`;
-      ui.prefTags.appendChild(tag);
-    });
-
-    ui.tuningList.innerHTML = "";
-    const packet = game.activePacket || engine.state.currentArm || defaultPacket;
-    Object.entries(packet.params).forEach(([key, value]) => {
-      const item = document.createElement("div");
-      item.textContent = `${key}: ${typeof value === "number" ? value.toFixed(2) : value}`;
-      ui.tuningList.appendChild(item);
-    });
-
-    const rationale = buildRationale(packet);
-    ui.rationaleText.textContent = rationale.text;
-    ui.signalList.innerHTML = "";
-    rationale.signals.forEach((signal) => {
-      const div = document.createElement("div");
-      div.textContent = `• ${signal}`;
-      ui.signalList.appendChild(div);
-    });
-
-    renderRoundSummary();
-    renderIdeas();
-    ui.rewardTrend.textContent = `Rolling reward trend: ${engine.state.rewardTrend.toFixed(2)}`;
-  }
-
-  function updateMetric(bar, valueEl, value) {
-    bar.style.width = `${(value * 100).toFixed(0)}%`;
-    valueEl.textContent = value.toFixed(2);
-  }
-
-  function buildRationale(packet) {
-    const model = engine.state.playerModel;
-    const signals = [];
-
-    signals.push(`Skill ${(model.skill.value * 100).toFixed(0)}% with uncertainty ${model.skill.variance.toFixed(2)}`);
-    signals.push(`Focus ${(model.focus.value * 100).toFixed(0)}% and fatigue ${(model.fatigue.value * 100).toFixed(0)}%`);
-    signals.push(`Preference fit: speed ${(model.prefs.speed * 100).toFixed(0)}%, precision ${(model.prefs.precision * 100).toFixed(0)}%`);
-
-    let text = "Selected a balanced packet to keep you in the flow zone.";
-    if (model.fatigue.value > 0.6 || packet.restRound) {
-      text = "Fatigue signals are rising, so the engine slowed the tempo and added more rest.";
-    } else if (packet.tier === "hard") {
-      text = "Your recent performance is strong, so difficulty was nudged up carefully.";
-    }
-
-    return { text, signals };
-  }
-
-  function renderRoundSummary() {
-    ui.roundSummary.innerHTML = "";
-    engine.state.roundHistory.forEach((summary) => {
-      const item = document.createElement("div");
-      item.textContent = `Round ${summary.round}: coins ${summary.coinsCollected}, collisions ${summary.collisionRate.toFixed(2)}`;
-      ui.roundSummary.appendChild(item);
-    });
-  }
-
-  function renderIdeas() {
-    ui.ideasList.innerHTML = "";
-    const ideas = [];
-    for (let i = 0; i < 3; i += 1) {
-      const idea = generateIdea();
-      const score = scoreIdea(idea.genome, engine.state.playerModel.prefs, engine.ideaArchive);
-      ideas.push({ ...idea, score });
-    }
-    ideas
-      .sort((a, b) => b.score - a.score)
-      .slice(0, 2)
-      .forEach((idea) => {
-        const card = document.createElement("div");
-        card.className = "idea";
-        const text = document.createElement("div");
-        text.textContent = idea.text;
-        const actions = document.createElement("div");
-        actions.className = "idea-actions";
-
-        const accept = document.createElement("button");
-        accept.textContent = "Accept";
-        accept.addEventListener("click", () => {
-          engine.ideaArchive.push(idea.genome);
-          engine.state.playerModel.prefs.exploration = clamp(engine.state.playerModel.prefs.exploration + 0.05, 0, 1);
-          engine.save();
-          updateDashboard();
-        });
-
-        const reject = document.createElement("button");
-        reject.textContent = "Reject";
-        reject.className = "ghost";
-        reject.addEventListener("click", () => {
-          engine.state.playerModel.prefs.precision = clamp(engine.state.playerModel.prefs.precision + 0.03, 0, 1);
-          engine.save();
-          updateDashboard();
-        });
-
-        actions.appendChild(accept);
-        actions.appendChild(reject);
-        card.appendChild(text);
-        card.appendChild(actions);
-        ui.ideasList.appendChild(card);
-      });
-  }
-
-  function updateBreakNudge() {
-    if (!engine.state.breakNudges) return;
-    const breakMinutes = parseInt(ui.breakMinutes.value, 10) || engine.state.breakMinutes || 10;
-    const breakMs = breakMinutes * 60 * 1000;
-    if (performance.now() - engine.state.lastBreakTime > breakMs) {
-      openModal(ui.breakModal);
-      engine.state.lastBreakTime = performance.now();
-    }
   }
 
   function loop(timestamp) {
-    const delta = (timestamp - game.lastFrame) / 1000;
+    const deltaRaw = (timestamp - game.lastFrame) / 1000;
     game.lastFrame = timestamp;
-    game.roundTime += delta;
-    timeValue.textContent = Math.floor(game.roundTime);
 
+    const timeScale = reducedMotion ? 0.9 : 1;
+    const timeDilation = 1 - game.currentExperience.ruleMutations.timeDilation * 0.25 * game.player.glow;
+    const delta = Math.min(0.03, deltaRaw) * timeScale * timeDilation;
+
+    updateExperience(delta);
     updatePlayer(delta);
-    updateSpawns(delta);
-    updateHazards(delta);
-    updateCoins(delta);
-    updateParticles(delta);
-    game.shakeTime = Math.max(0, game.shakeTime - delta);
-    checkCollisions();
+    updatePatterns(delta);
+    updateSparks(delta);
+    updateTrails(delta);
+    updateMetrics(delta);
     render();
 
-    if (game.roundTime >= game.activePacket.params.roundLength) {
-      endRound();
+    if (timestamp - game.lastAdaptiveTick > 4500) {
+      tickAdaptive();
+      game.lastAdaptiveTick = timestamp;
     }
 
-    if (timestamp - game.sessionStart > 2500) {
-      onboardingTip.classList.add("hidden");
-    }
-
-    updateBreakNudge();
     requestAnimationFrame(loop);
   }
 
+  function updateExperience(delta) {
+    const current = game.currentExperience;
+    const target = game.targetExperience;
+    if (!target) return;
+
+    current.patternSymmetry = lerp(current.patternSymmetry, target.patternSymmetry, delta * 0.4);
+    current.temporalRhythm = lerp(current.temporalRhythm, target.temporalRhythm, delta * 0.4);
+    current.visualDensity = lerp(current.visualDensity, target.visualDensity, delta * 0.4);
+    current.colorDynamics = lerp(current.colorDynamics, target.colorDynamics, delta * 0.4);
+    current.rewardStructure = lerp(current.rewardStructure, target.rewardStructure, delta * 0.4);
+    current.cameraBehavior = lerp(current.cameraBehavior, target.cameraBehavior, delta * 0.4);
+    current.ruleMutations.mirror = lerp(current.ruleMutations.mirror, target.ruleMutations.mirror, delta * 0.4);
+    current.ruleMutations.curveSpace = lerp(current.ruleMutations.curveSpace, target.ruleMutations.curveSpace, delta * 0.4);
+    current.ruleMutations.timeDilation = lerp(current.ruleMutations.timeDilation, target.ruleMutations.timeDilation, delta * 0.4);
+    current.ruleMutations.precisionScoring = lerp(
+      current.ruleMutations.precisionScoring,
+      target.ruleMutations.precisionScoring,
+      delta * 0.4
+    );
+
+    if (current.enemyTopology !== target.enemyTopology) {
+      current.enemyTopology = target.enemyTopology;
+      game.phaseName = phaseName(current);
+      phaseValue.textContent = game.phaseName;
+    }
+  }
+
   function updatePlayer(delta) {
-    const params = game.activePacket.params;
-    const accel = params.playerSpeed;
+    const accel = 260;
+    const curve = game.currentExperience.ruleMutations.curveSpace;
 
     if (input.up) game.player.vy -= accel * delta;
     if (input.down) game.player.vy += accel * delta;
     if (input.left) game.player.vx -= accel * delta;
     if (input.right) game.player.vx += accel * delta;
 
-    const friction = params.friction;
-    game.player.vx *= friction;
-    game.player.vy *= friction;
+    if (curve > 0.05) {
+      const swirl = curve * 0.5;
+      const temp = game.player.vx;
+      game.player.vx = lerp(game.player.vx, -game.player.vy, swirl * delta * 2);
+      game.player.vy = lerp(game.player.vy, temp, swirl * delta * 2);
+    }
+
+    game.player.vx *= 0.88;
+    game.player.vy *= 0.88;
 
     game.player.x += game.player.vx * delta;
     game.player.y += game.player.vy * delta;
 
-    const padding = game.player.radius + 6;
-    game.player.x = clamp(game.player.x, padding, canvas.clientWidth - padding);
-    game.player.y = clamp(game.player.y, padding, canvas.clientHeight - padding);
+    const margin = game.player.radius + 10;
+    game.player.x = clamp(game.player.x, margin, game.width - margin);
+    game.player.y = clamp(game.player.y, margin, game.height - margin);
 
-    const speedMag = Math.hypot(game.player.vx, game.player.vy);
-    game.inputSamples.push(clamp(speedMag / 200, 0, 1));
-    game.streakTimer += delta;
-    if (game.streakTimer > params.streakWindow) {
-      game.streak = 0;
-      game.streakTimer = 0;
+    const speed = Math.hypot(game.player.vx, game.player.vy);
+    game.player.glow = lerp(game.player.glow, clamp(speed / 240, 0, 1), 0.12);
+
+    if (!reducedMotion) {
+      game.trails.push({
+        x: game.player.x,
+        y: game.player.y,
+        life: 0.6,
+        radius: game.player.radius + 6,
+      });
     }
   }
 
-  function updateSpawns(delta) {
-    const params = game.activePacket.params;
-    game.spawnTimer += delta;
-    game.coinTimer += delta;
+  function updatePatterns(delta) {
+    const exp = game.currentExperience;
+    const density = exp.visualDensity;
+    const rhythm = exp.temporalRhythm;
+    const centerShift = exp.ruleMutations.mirror * 0.3;
+    const center = {
+      x: game.width / 2 + game.player.vx * centerShift,
+      y: game.height / 2 + game.player.vy * centerShift,
+    };
 
-    const ramp = clamp(1 + (game.roundTime / params.roundLength - 0.5) * 0.3 * params.intensityRamp, 0.7, 1.5);
-    const hazardInterval = 1 / (params.hazardSpawn * ramp);
-    const coinInterval = 1 / params.coinSpawn;
-
-    if (game.spawnTimer >= hazardInterval) {
-      game.spawnTimer = 0;
-      spawnHazard();
-    }
-
-    if (game.coinTimer >= coinInterval) {
-      game.coinTimer = 0;
-      spawnCoin();
-    }
-  }
-
-  function spawnHazard() {
-    const size = game.activePacket.params.hazardSize;
-    const edge = Math.floor(Math.random() * 4);
-    let x = 0;
-    let y = 0;
-    if (edge === 0) {
-      x = rand(0, canvas.clientWidth);
-      y = -size;
-    } else if (edge === 1) {
-      x = canvas.clientWidth + size;
-      y = rand(0, canvas.clientHeight);
-    } else if (edge === 2) {
-      x = rand(0, canvas.clientWidth);
-      y = canvas.clientHeight + size;
-    } else {
-      x = -size;
-      y = rand(0, canvas.clientHeight);
-    }
-
-    const angle = Math.atan2(game.player.y - y, game.player.x - x);
-    const speed = game.activePacket.params.hazardSpeed * rand(0.7, 1.2);
-    game.hazards.push({
-      x,
-      y,
-      vx: Math.cos(angle) * speed,
-      vy: Math.sin(angle) * speed,
-      size,
-      pattern: rand(0, 1),
-      spawnTime: performance.now(),
-    });
-  }
-
-  function spawnCoin() {
-    const padding = 30;
-    const x = rand(padding, canvas.clientWidth - padding);
-    const y = rand(padding, canvas.clientHeight - padding);
-    game.coins.push({ x, y, radius: 8, spawnTime: performance.now() });
-    game.coinsSpawned += 1;
-  }
-
-  function updateHazards(delta) {
-    const patternStrength = game.activePacket.params.hazardPattern;
-    game.hazards.forEach((hazard) => {
-      if (hazard.pattern < patternStrength) {
-        const angle = Math.atan2(game.player.y - hazard.y, game.player.x - hazard.x);
-        hazard.vx = lerp(hazard.vx, Math.cos(angle) * game.activePacket.params.hazardSpeed, 0.02);
-        hazard.vy = lerp(hazard.vy, Math.sin(angle) * game.activePacket.params.hazardSpeed, 0.02);
+    if (exp.enemyTopology === "pulse") {
+      if (game.pulses.length < 6 * density && Math.random() < delta * rhythm * 0.9) {
+        game.pulses.push(createPulse(center));
       }
-
-      hazard.x += hazard.vx * delta;
-      hazard.y += hazard.vy * delta;
-    });
-
-    game.hazards = game.hazards.filter(
-      (hazard) => hazard.x > -40 && hazard.x < canvas.clientWidth + 40 && hazard.y > -40 && hazard.y < canvas.clientHeight + 40
-    );
-  }
-
-  function updateCoins(delta) {
-    const floatSpeed = game.reducedMotion ? 0 : 0.6;
-    game.coins.forEach((coin) => {
-      coin.y += Math.sin(performance.now() / 400) * floatSpeed * delta;
-    });
-  }
-
-  function updateParticles(delta) {
-    game.particles.forEach((particle) => {
-      particle.life -= delta;
-      particle.x += particle.vx * delta;
-      particle.y += particle.vy * delta;
-    });
-    game.particles = game.particles.filter((p) => p.life > 0);
-  }
-
-  function checkCollisions() {
-    const player = game.player;
-
-    game.hazards.forEach((hazard) => {
-      const dist = Math.hypot(player.x - hazard.x, player.y - hazard.y);
-      if (dist < player.radius + hazard.size) {
-        game.collisions += 1;
-        game.streak = 0;
-        game.streakTimer = 0;
-        engine.track("collision", { time: performance.now() });
-        if (!game.reducedMotion) {
-          game.shakeTime = 0.25;
-        }
-        spawnBurst(player.x, player.y, "#f97316");
-      } else if (dist < player.radius + hazard.size + 18) {
-        game.nearMisses += 1;
-        engine.track("near_miss", { time: performance.now() });
+    } else if (exp.enemyTopology === "spiral") {
+      if (game.pulses.length < 5 * density && Math.random() < delta * rhythm * 0.8) {
+        game.pulses.push(createSpiral(center, exp.patternSymmetry));
       }
+    } else if (exp.enemyTopology === "orbit") {
+      if (game.orbiters.length < 5 + density * 3) {
+        game.orbiters = createOrbiters(center, exp.patternSymmetry, density);
+      }
+    } else if (exp.enemyTopology === "lattice") {
+      if (game.lattices.length < 4) {
+        game.lattices = createLattices(exp.patternSymmetry, density);
+      }
+    } else if (exp.enemyTopology === "mirror") {
+      if (game.orbiters.length < 3 + density * 4) {
+        game.orbiters = createMirrorOrbits(exp.patternSymmetry, density);
+      }
+    }
+
+    game.pulses.forEach((pulse) => {
+      pulse.radius += pulse.speed * delta;
+      pulse.angle += pulse.rotation * delta;
+      pulse.life -= delta * 0.25;
+    });
+    game.pulses = game.pulses.filter((pulse) => pulse.life > 0 && pulse.radius < game.width * 0.9);
+
+    game.orbiters.forEach((orbiter) => {
+      orbiter.angle += orbiter.speed * delta;
+      orbiter.radius += Math.sin(performance.now() / 600 + orbiter.phase) * delta * 4;
     });
 
-    game.coins = game.coins.filter((coin) => {
-      const dist = Math.hypot(player.x - coin.x, player.y - coin.y);
-      if (dist < player.radius + coin.radius) {
-        game.collected += 1;
-        const streakBonus = Math.floor(game.streak / 3);
-        game.score += game.activePacket.params.coinValue + streakBonus;
-        game.streak += 1;
-        game.streakTimer = 0;
-        const reactionTime = (performance.now() - coin.spawnTime) / 1000;
-        game.reactionSamples.push(clamp(1 - reactionTime / 2.2, 0, 1));
-        engine.track("coin_collect", { reactionTime });
-        spawnBurst(coin.x, coin.y, "#34d399");
+    game.lattices.forEach((line) => {
+      line.offset += line.speed * delta;
+    });
+  }
+
+  function updateSparks(delta) {
+    const reward = game.currentExperience.rewardStructure;
+    if (game.sparks.length < 6 && Math.random() < delta * (0.6 + reward)) {
+      const spot = findSparkSpot();
+      if (spot) {
+        game.sparks.push({ x: spot.x, y: spot.y, radius: 6, life: 4 });
+      }
+    }
+
+    game.sparks.forEach((spark) => {
+      spark.life -= delta;
+    });
+    game.sparks = game.sparks.filter((spark) => spark.life > 0);
+
+    game.sparks = game.sparks.filter((spark) => {
+      if (dist(game.player, spark) < game.player.radius + spark.radius + 4) {
+        const precisionBoost = 1 + game.currentExperience.ruleMutations.precisionScoring * game.player.glow;
+        const gain = Math.round(12 * precisionBoost * game.combo);
+        game.score += gain;
+        game.combo += 0.2;
+        game.comboTimer = 0;
+        game.metricsWindow.scoreGains += gain;
+        game.metricsWindow.comboGains += 1;
+        spawnBurst(spark.x, spark.y, 12, "rgba(120,255,220,0.7)");
         return false;
       }
       return true;
     });
 
-    scoreValue.textContent = game.score;
+    game.comboTimer += delta;
+    if (game.comboTimer > 4) {
+      game.combo = lerp(game.combo, 1, delta * 0.6);
+    }
+
+    scoreValue.textContent = Math.floor(game.score).toString();
+    comboValue.textContent = `x${game.combo.toFixed(1)}`;
   }
 
-  function spawnBurst(x, y, color) {
-    if (game.reducedMotion) return;
-    for (let i = 0; i < 6; i += 1) {
-      game.particles.push({
-        x,
-        y,
-        vx: rand(-40, 40),
-        vy: rand(-40, 40),
-        life: rand(0.4, 0.9),
-        color,
+  function updateTrails(delta) {
+    game.trails.forEach((trail) => {
+      trail.life -= delta;
+    });
+    game.trails = game.trails.filter((trail) => trail.life > 0);
+  }
+
+  function updateMetrics(delta) {
+    const windowData = game.metricsWindow;
+    windowData.time += delta;
+
+    const cellX = Math.floor((game.player.x / game.width) * 6);
+    const cellY = Math.floor((game.player.y / game.height) * 6);
+    windowData.explorationCells.add(`${cellX}:${cellY}`);
+
+    const speed = Math.hypot(game.player.vx, game.player.vy);
+    const smoothness = clamp(1 - Math.abs(speed - 140) / 180, 0, 1);
+    windowData.smoothnessSamples.push(smoothness);
+
+    const reactionMargin = nearestHazardDistance() / 120;
+    windowData.reactionSamples.push(clamp(reactionMargin, 0, 1));
+  }
+
+  function tickAdaptive() {
+    const metrics = buildMetrics();
+    const exp = engine.evaluate(metrics);
+    game.targetExperience = exp;
+    game.metricsWindow = createMetricsWindow();
+  }
+
+  function buildMetrics() {
+    const windowData = game.metricsWindow;
+    const smoothness = average(windowData.smoothnessSamples, 0.6);
+    const reactionMargin = average(windowData.reactionSamples, 0.6);
+    const explorationRate = windowData.explorationCells.size / 36;
+    const collisionRate = windowData.collisions / Math.max(1, windowData.hazardChecks);
+    const riskBias = windowData.nearMisses / Math.max(1, windowData.hazardChecks);
+    const patternComprehension = clamp(1 - collisionRate * 1.2, 0, 1);
+    const enduranceState = clamp(1 - windowData.time / 200 - collisionRate * 0.4, 0, 1);
+
+    const engagementScore = clamp(
+      (windowData.scoreGains / Math.max(1, windowData.time)) * 0.02 +
+        windowData.comboGains * 0.05 +
+        patternComprehension * 0.4 +
+        smoothness * 0.3,
+      0,
+      1
+    );
+
+    return {
+      smoothness,
+      reactionMargin,
+      explorationRate,
+      collisionRate,
+      riskBias,
+      patternComprehension,
+      enduranceState,
+      engagementScore,
+    };
+  }
+
+  function findSparkSpot() {
+    const tries = 8;
+    for (let i = 0; i < tries; i += 1) {
+      const x = rand(40, game.width - 40);
+      const y = rand(40, game.height - 40);
+      if (nearestHazardDistance({ x, y }) > 70) {
+        return { x, y };
+      }
+    }
+    return null;
+  }
+
+  function nearestHazardDistance(point = game.player) {
+    let nearest = 200;
+    const hazardPoints = gatherHazards();
+    hazardPoints.forEach((hazard) => {
+      const d = Math.hypot(point.x - hazard.x, point.y - hazard.y) - hazard.radius;
+      if (d < nearest) nearest = d;
+    });
+    return clamp(nearest, 0, 200);
+  }
+
+  function gatherHazards() {
+    const hazards = [];
+    game.pulses.forEach((pulse) => {
+      const points = pulsePoints(pulse);
+      points.forEach((point) => hazards.push(point));
+    });
+
+    if (game.currentExperience.enemyTopology === "orbit" || game.currentExperience.enemyTopology === "mirror") {
+      game.orbiters.forEach((orbiter) => {
+        const pos = orbiterPosition(orbiter);
+        hazards.push({ x: pos.x, y: pos.y, radius: orbiter.size });
       });
     }
+
+    if (game.currentExperience.enemyTopology === "lattice") {
+      game.lattices.forEach((line) => {
+        latticePoints(line).forEach((point) => hazards.push(point));
+      });
+    }
+
+    return hazards;
+  }
+
+  function pulsePoints(pulse) {
+    const points = [];
+    const segments = 10 + Math.floor(game.currentExperience.patternSymmetry * 3);
+    for (let i = 0; i < segments; i += 1) {
+      const angle = (Math.PI * 2 * i) / segments;
+      const gapDiff = Math.abs(normalizeAngle(angle - pulse.angle));
+      if (gapDiff < pulse.gapSize) continue;
+      points.push({
+        x: pulse.center.x + Math.cos(angle) * pulse.radius,
+        y: pulse.center.y + Math.sin(angle) * pulse.radius,
+        radius: pulse.thickness,
+      });
+    }
+    return points;
+  }
+
+  function latticePoints(line) {
+    const points = [];
+    const count = 8 + Math.floor(game.currentExperience.patternSymmetry * 2);
+    for (let i = 0; i < count; i += 1) {
+      const offset = (i / count) * game.height;
+      if (line.axis === "x") {
+        points.push({
+          x: line.offset + Math.sin(i + performance.now() / 800) * 60,
+          y: offset,
+          radius: line.thickness,
+        });
+      } else {
+        points.push({
+          x: offset,
+          y: line.offset + Math.cos(i + performance.now() / 900) * 60,
+          radius: line.thickness,
+        });
+      }
+    }
+    return points;
+  }
+
+  function orbiterPosition(orbiter) {
+    const center = { x: game.width / 2, y: game.height / 2 };
+    const mirror = game.currentExperience.enemyTopology === "mirror";
+    if (mirror) {
+      const offsetX = (center.x - game.player.x) * 0.6;
+      const offsetY = (center.y - game.player.y) * 0.6;
+      center.x += offsetX;
+      center.y += offsetY;
+    }
+    return {
+      x: center.x + Math.cos(orbiter.angle) * orbiter.radius,
+      y: center.y + Math.sin(orbiter.angle) * orbiter.radius,
+    };
+  }
+
+  function updateCollisions() {
+    const hazards = gatherHazards();
+    hazards.forEach((hazard) => {
+      const d = Math.hypot(game.player.x - hazard.x, game.player.y - hazard.y);
+      if (d < game.player.radius + hazard.radius) {
+        game.metricsWindow.collisions += 1;
+        game.combo = 1;
+        game.player.vx *= -0.3;
+        game.player.vy *= -0.3;
+        spawnBurst(game.player.x, game.player.y, 16, "rgba(255,120,120,0.6)");
+      } else if (d < game.player.radius + hazard.radius + 14) {
+        game.metricsWindow.nearMisses += 1;
+      }
+      game.metricsWindow.hazardChecks += 1;
+    });
   }
 
   function render() {
-    ctx.clearRect(0, 0, canvas.clientWidth, canvas.clientHeight);
+    ctx.clearRect(0, 0, game.width, game.height);
 
+    drawBackground();
+    drawPulses();
+    drawLattices();
+    drawOrbiters();
+    drawSparks();
+    drawPlayer();
+    drawTrails();
+
+    updateCollisions();
+  }
+
+  function drawBackground() {
+    const exp = game.currentExperience;
+    const hue = (performance.now() / 60) * exp.colorDynamics;
+    const gradient = ctx.createRadialGradient(
+      game.width * 0.5,
+      game.height * 0.5,
+      40,
+      game.width * 0.5,
+      game.height * 0.5,
+      Math.max(game.width, game.height)
+    );
+    gradient.addColorStop(0, `hsla(${200 + hue}, 80%, 25%, 0.35)`);
+    gradient.addColorStop(1, "rgba(5, 7, 15, 0.95)");
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, game.width, game.height);
+  }
+
+  function drawPulses() {
     ctx.save();
-    if (game.shakeTime > 0 && !game.reducedMotion) {
-      const intensity = game.activePacket.params.shake * 4;
-      const offsetX = rand(-intensity, intensity) * (game.shakeTime / 0.25);
-      const offsetY = rand(-intensity, intensity) * (game.shakeTime / 0.25);
-      ctx.translate(offsetX, offsetY);
-    }
+    ctx.strokeStyle = "rgba(90, 220, 255, 0.5)";
+    ctx.lineWidth = 2;
 
-    drawArenaGlow();
+    game.pulses.forEach((pulse) => {
+      const segments = 10 + Math.floor(game.currentExperience.patternSymmetry * 3);
+      for (let i = 0; i < segments; i += 1) {
+        const angle = (Math.PI * 2 * i) / segments;
+        const gapDiff = Math.abs(normalizeAngle(angle - pulse.angle));
+        if (gapDiff < pulse.gapSize) continue;
+        const x = pulse.center.x + Math.cos(angle) * pulse.radius;
+        const y = pulse.center.y + Math.sin(angle) * pulse.radius;
+        ctx.beginPath();
+        ctx.arc(x, y, pulse.thickness, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+    });
+    ctx.restore();
+  }
 
-    ctx.fillStyle = "#38bdf8";
+  function drawOrbiters() {
+    if (!game.orbiters.length) return;
+    ctx.save();
+    ctx.fillStyle = "rgba(255, 120, 220, 0.6)";
+    game.orbiters.forEach((orbiter) => {
+      const pos = orbiterPosition(orbiter);
+      ctx.beginPath();
+      ctx.arc(pos.x, pos.y, orbiter.size, 0, Math.PI * 2);
+      ctx.fill();
+    });
+    ctx.restore();
+  }
+
+  function drawLattices() {
+    if (!game.lattices.length) return;
+    ctx.save();
+    ctx.strokeStyle = "rgba(120, 255, 200, 0.35)";
+    ctx.lineWidth = 2;
+    game.lattices.forEach((line) => {
+      const points = latticePoints(line);
+      points.forEach((point) => {
+        ctx.beginPath();
+        ctx.arc(point.x, point.y, point.radius, 0, Math.PI * 2);
+        ctx.stroke();
+      });
+    });
+    ctx.restore();
+  }
+
+  function drawSparks() {
+    ctx.save();
+    ctx.fillStyle = "rgba(140, 255, 220, 0.9)";
+    game.sparks.forEach((spark) => {
+      ctx.beginPath();
+      ctx.arc(spark.x, spark.y, spark.radius, 0, Math.PI * 2);
+      ctx.fill();
+    });
+    ctx.restore();
+  }
+
+  function drawPlayer() {
+    ctx.save();
+    const glow = 15 + game.player.glow * 18;
+    ctx.shadowColor = "rgba(120, 255, 255, 0.8)";
+    ctx.shadowBlur = glow;
+    ctx.fillStyle = "rgba(120, 220, 255, 0.9)";
     ctx.beginPath();
     ctx.arc(game.player.x, game.player.y, game.player.radius, 0, Math.PI * 2);
     ctx.fill();
-
-    ctx.fillStyle = "#f97316";
-    game.hazards.forEach((hazard) => {
-      ctx.beginPath();
-      ctx.arc(hazard.x, hazard.y, hazard.size, 0, Math.PI * 2);
-      ctx.fill();
-    });
-
-    ctx.fillStyle = "#22c55e";
-    game.coins.forEach((coin) => {
-      ctx.beginPath();
-      ctx.arc(coin.x, coin.y, coin.radius, 0, Math.PI * 2);
-      ctx.fill();
-    });
-
-    game.particles.forEach((particle) => {
-      ctx.globalAlpha = clamp(particle.life, 0, 1);
-      ctx.fillStyle = particle.color;
-      ctx.beginPath();
-      ctx.arc(particle.x, particle.y, 3, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.globalAlpha = 1;
-    });
     ctx.restore();
   }
 
-  function drawArenaGlow() {
-    if (game.reducedMotion) return;
+  function drawTrails() {
+    if (reducedMotion) return;
     ctx.save();
-    ctx.globalAlpha = 0.2;
-    ctx.fillStyle = "#1d4ed8";
-    ctx.beginPath();
-    ctx.arc(canvas.clientWidth / 2, canvas.clientHeight / 2, 220, 0, Math.PI * 2);
-    ctx.fill();
+    game.trails.forEach((trail) => {
+      ctx.globalAlpha = clamp(trail.life, 0, 1);
+      ctx.strokeStyle = "rgba(80, 200, 255, 0.4)";
+      ctx.beginPath();
+      ctx.arc(trail.x, trail.y, trail.radius, 0, Math.PI * 2);
+      ctx.stroke();
+    });
     ctx.restore();
   }
 
-  function average(list, fallback = 0) {
-    if (!list || list.length === 0) return fallback;
+  function spawnBurst(x, y, count, color) {
+    if (reducedMotion) return;
+    ctx.save();
+    ctx.fillStyle = color;
+    for (let i = 0; i < count; i += 1) {
+      const angle = rand(0, Math.PI * 2);
+      const radius = rand(6, 24);
+      ctx.beginPath();
+      ctx.arc(x + Math.cos(angle) * radius, y + Math.sin(angle) * radius, 2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  function createPulse(center) {
+    return {
+      center: { ...center },
+      radius: rand(30, 80),
+      speed: rand(20, 40) * game.currentExperience.temporalRhythm,
+      thickness: rand(6, 10) * game.currentExperience.visualDensity,
+      angle: rand(0, Math.PI * 2),
+      gapSize: rand(0.3, 0.6),
+      rotation: rand(-0.6, 0.6),
+      life: 1,
+    };
+  }
+
+  function createSpiral(center, symmetry) {
+    return {
+      center: { ...center },
+      radius: rand(30, 60),
+      speed: rand(30, 60) * game.currentExperience.temporalRhythm,
+      thickness: rand(5, 9) * game.currentExperience.visualDensity,
+      angle: rand(0, Math.PI * 2),
+      gapSize: 0.25 + (symmetry / 10),
+      rotation: rand(0.4, 0.9),
+      life: 1,
+    };
+  }
+
+  function createOrbiters(center, symmetry, density) {
+    const orbiters = [];
+    const count = Math.floor(symmetry + density * 2);
+    for (let i = 0; i < count; i += 1) {
+      orbiters.push({
+        angle: (Math.PI * 2 * i) / count,
+        radius: rand(80, 220),
+        speed: rand(0.4, 0.9),
+        size: rand(7, 12) * density,
+        phase: rand(0, Math.PI * 2),
+      });
+    }
+    return orbiters;
+  }
+
+  function createMirrorOrbits(symmetry, density) {
+    const orbiters = [];
+    const count = Math.floor(symmetry + density * 3);
+    for (let i = 0; i < count; i += 1) {
+      orbiters.push({
+        angle: (Math.PI * 2 * i) / count,
+        radius: rand(60, 200),
+        speed: rand(0.5, 1.0),
+        size: rand(6, 11) * density,
+        phase: rand(0, Math.PI * 2),
+      });
+    }
+    return orbiters;
+  }
+
+  function createLattices(symmetry, density) {
+    const lines = [];
+    const count = Math.max(2, Math.floor(symmetry / 2));
+    for (let i = 0; i < count; i += 1) {
+      lines.push({
+        axis: i % 2 === 0 ? "x" : "y",
+        offset: rand(0, i % 2 === 0 ? game.width : game.height),
+        speed: rand(-20, 20) * density,
+        thickness: rand(6, 10) * density,
+      });
+    }
+    return lines;
+  }
+
+  function phaseName(exp) {
+    const base = {
+      spiral: "Spiral Drift",
+      pulse: "Pulse Field",
+      lattice: "Lattice Flow",
+      orbit: "Orbit Trace",
+      mirror: "Mirror Tide",
+    }[exp.enemyTopology];
+    return base || "Driftline";
+  }
+
+  function normalizeAngle(angle) {
+    const tau = Math.PI * 2;
+    return ((angle % tau) + tau) % tau;
+  }
+
+  function average(list, fallback) {
+    if (!list.length) return fallback;
     return list.reduce((sum, value) => sum + value, 0) / list.length;
   }
 
-  initGame();
+  initializeGame();
 })();
