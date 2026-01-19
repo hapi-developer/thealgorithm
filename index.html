@@ -3,15 +3,15 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Checkpoint Clash</title>
+  <title>Checkpoint Command</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
   <div class="app">
     <header class="top-bar">
       <div class="brand">
-        <span class="brand-title">Checkpoint Clash</span>
-        <span class="brand-subtitle">Beat the bot, reach every 1,000-point checkpoint</span>
+        <span class="brand-title">Checkpoint Command</span>
+        <span class="brand-subtitle">Strategic duels, infinite levels, checkpoint safety</span>
       </div>
       <div class="scoreboard">
         <div class="score-card">
@@ -25,64 +25,83 @@
       </div>
     </header>
 
-    <main class="game-shell">
-      <section class="arena">
-        <div class="arena-header">
-          <h2>Signal Duel</h2>
-          <p>Tap play to draw a signal strength. Higher strength wins. Wins are +100, losses are -100.</p>
+    <main class="screens">
+      <section id="checkpointScreen" class="screen active">
+        <div class="checkpoint-hero">
+          <h1>Reach the next checkpoint</h1>
+          <p>Every 1,000 points is a level. Wins are +100, losses are -100, but checkpoints lock your progress.</p>
         </div>
-        <div class="duel-board">
-          <div class="fighter-card">
-            <span class="fighter-label">You</span>
-            <span id="playerPower" class="fighter-power">--</span>
-            <span id="playerStatus" class="fighter-status">Ready</span>
+
+        <div class="track-panel">
+          <div class="track-header">
+            <div>
+              <span class="meta-label">Current Level</span>
+              <span id="checkpointValue" class="meta-value">0</span>
+            </div>
+            <div>
+              <span class="meta-label">Win Rate</span>
+              <span id="winRateValue" class="meta-value">0%</span>
+            </div>
+            <div>
+              <span class="meta-label">Difficulty</span>
+              <span id="difficultyValue" class="meta-value">Calibrating</span>
+            </div>
           </div>
-          <div class="vs">VS</div>
-          <div class="fighter-card bot">
-            <span class="fighter-label">Bot</span>
-            <span id="botPower" class="fighter-power">--</span>
-            <span id="botStatus" class="fighter-status">Calibrating</span>
+          <div class="track" aria-label="Checkpoint progress">
+            <div class="track-line"></div>
+            <div id="trackFill" class="track-fill"></div>
+            <div id="checkpointDots" class="track-dots"></div>
+          </div>
+          <div class="track-footer">
+            <div>
+              <span class="meta-label">Next Checkpoint</span>
+              <span id="nextCheckpoint" class="meta-value">1,000 pts</span>
+            </div>
+            <div>
+              <span class="meta-label">Pressure Round</span>
+              <span id="pressureValue" class="meta-value">Inactive</span>
+            </div>
+            <div>
+              <span class="meta-label">Adaptive Target</span>
+              <span id="fairnessValue" class="meta-value">50% fairness</span>
+            </div>
           </div>
         </div>
-        <div class="arena-actions">
-          <button id="playBtn" class="primary">Play Duel</button>
-          <button id="resetBtn" class="secondary">Reset Run</button>
+
+        <div class="cta-wrap">
+          <button id="playBtn" class="primary">Play Match</button>
         </div>
-        <div class="arena-foot">
-          <div>
-            <span class="meta-label">Difficulty</span>
-            <span id="difficultyValue" class="meta-value">Balanced</span>
-          </div>
-          <div>
-            <span class="meta-label">Fairness Target</span>
-            <span id="fairnessValue" class="meta-value">50% win rate</span>
-          </div>
-          <div>
-            <span class="meta-label">Next Checkpoint</span>
-            <span id="nextCheckpoint" class="meta-value">1,000 pts</span>
-          </div>
-        </div>
-        <div id="resultBanner" class="result-banner">Your duel result shows here.</div>
       </section>
 
-      <section class="progress">
-        <header class="progress-header">
-          <h3>Checkpoint Path</h3>
-          <p>Every 1,000 points is a checkpoint. When you're one win away, the bot tightens the odds.</p>
-        </header>
-        <div class="checkpoint-path" id="checkpointPath"></div>
-        <div class="progress-stats">
+      <section id="gameScreen" class="screen">
+        <div class="game-header">
           <div>
-            <span class="meta-label">Current Checkpoint</span>
-            <span id="checkpointValue" class="meta-value">0</span>
+            <h2>Grid Tactics</h2>
+            <p>Claim sectors on the grid. You move first; the bot adapts to match long-term fairness.</p>
           </div>
-          <div>
-            <span class="meta-label">Win Rate</span>
-            <span id="winRateValue" class="meta-value">0%</span>
+          <button id="backBtn" class="secondary">Back to Checkpoints</button>
+        </div>
+
+        <div class="game-panel">
+          <div class="turn-info">
+            <div>
+              <span class="meta-label">Turn</span>
+              <span id="turnValue" class="meta-value">Player</span>
+            </div>
+            <div>
+              <span class="meta-label">Match Status</span>
+              <span id="matchStatus" class="meta-value">Ready</span>
+            </div>
+            <div>
+              <span class="meta-label">Score</span>
+              <span id="matchScore" class="meta-value">0 - 0</span>
+            </div>
           </div>
-          <div>
-            <span class="meta-label">Streak</span>
-            <span id="streakValue" class="meta-value">0</span>
+          <div id="grid" class="grid" role="grid" aria-label="Strategy grid"></div>
+          <div id="resultBanner" class="result-banner">Start a match to see the outcome.</div>
+          <div class="game-actions">
+            <button id="startMatchBtn" class="primary">Start Match</button>
+            <button id="resetRunBtn" class="secondary">Reset Run</button>
           </div>
         </div>
       </section>
