@@ -19,8 +19,8 @@
           <span id="pointsValue" class="score-value">0</span>
         </div>
         <div class="score-card">
-          <span class="score-label">Record</span>
-          <span id="recordValue" class="score-value">0W - 0L</span>
+          <span class="score-label">Win Rate</span>
+          <span id="winRateValue" class="score-value">0%</span>
         </div>
       </div>
     </header>
@@ -29,7 +29,7 @@
       <section id="checkpointScreen" class="screen active">
         <div class="checkpoint-hero">
           <h1>Reach the next checkpoint</h1>
-          <p>Every 1,000 points is a level. Wins are +100, losses are -100, but checkpoints lock your progress.</p>
+          <p>Every 1,000 points is a level. Wins are +100, losses are -100, and checkpoints lock your progress.</p>
         </div>
 
         <div class="track-panel">
@@ -37,14 +37,6 @@
             <div>
               <span class="meta-label">Current Level</span>
               <span id="checkpointValue" class="meta-value">0</span>
-            </div>
-            <div>
-              <span class="meta-label">Win Rate</span>
-              <span id="winRateValue" class="meta-value">0%</span>
-            </div>
-            <div>
-              <span class="meta-label">Difficulty</span>
-              <span id="difficultyValue" class="meta-value">Calibrating</span>
             </div>
           </div>
           <div class="track" aria-label="Checkpoint progress">
@@ -57,14 +49,6 @@
               <span class="meta-label">Next Checkpoint</span>
               <span id="nextCheckpoint" class="meta-value">1,000 pts</span>
             </div>
-            <div>
-              <span class="meta-label">Pressure Round</span>
-              <span id="pressureValue" class="meta-value">Inactive</span>
-            </div>
-            <div>
-              <span class="meta-label">Adaptive Target</span>
-              <span id="fairnessValue" class="meta-value">50% fairness</span>
-            </div>
           </div>
         </div>
 
@@ -76,31 +60,22 @@
       <section id="gameScreen" class="screen">
         <div class="game-header">
           <div>
-            <h2>Grid Tactics</h2>
-            <p>Claim sectors on the grid. You move first; the bot adapts to match long-term fairness.</p>
+            <h2>Focus Circuit</h2>
+            <p>Stop the moving pulse inside the target zone. Precision wins the round.</p>
           </div>
           <button id="backBtn" class="secondary">Back to Checkpoints</button>
         </div>
 
         <div class="game-panel">
-          <div class="turn-info">
-            <div>
-              <span class="meta-label">Turn</span>
-              <span id="turnValue" class="meta-value">Player</span>
-            </div>
-            <div>
-              <span class="meta-label">Match Status</span>
-              <span id="matchStatus" class="meta-value">Ready</span>
-            </div>
-            <div>
-              <span class="meta-label">Score</span>
-              <span id="matchScore" class="meta-value">0 - 0</span>
-            </div>
+          <div class="meter-tip">Stop the pulse inside the glowing zone. Five rounds decide the match.</div>
+          <div class="focus-meter" role="img" aria-label="Timing meter">
+            <div id="targetZone" class="target-zone"></div>
+            <div id="marker" class="marker"></div>
           </div>
-          <div id="grid" class="grid" role="grid" aria-label="Strategy grid"></div>
           <div id="resultBanner" class="result-banner">Start a match to see the outcome.</div>
           <div class="game-actions">
             <button id="startMatchBtn" class="primary">Start Match</button>
+            <button id="stopBtn" class="secondary" disabled>Stop Pulse</button>
             <button id="resetRunBtn" class="secondary">Reset Run</button>
           </div>
         </div>
@@ -108,6 +83,6 @@
     </main>
   </div>
 
-  <script src="app.js"></script>
+  <script src="app.js?v=2"></script>
 </body>
 </html>
