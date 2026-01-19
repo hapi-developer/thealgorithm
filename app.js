@@ -21,6 +21,20 @@ const setText = (el, value) => {
   }
 };
 
+const $ = (id) => {
+  const el = document.getElementById(id);
+  if (!el) {
+    console.warn(`Missing element: ${id}`);
+  }
+  return el;
+};
+
+const setText = (el, value) => {
+  if (el) {
+    el.textContent = value;
+  }
+};
+
 const Utils = {
   clamp(value, min, max) {
     return Math.min(Math.max(value, min), max);
