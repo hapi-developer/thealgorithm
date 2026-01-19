@@ -1,25 +1,27 @@
+/* Checkpoint Command — app.js (fixed) */
+
 const STORAGE_KEY = "checkpoint_command_state_v1";
 const CHECKPOINT_POINTS = 1000;
 const POINTS_PER_WIN = 100;
 const POINTS_PER_LOSS = -100;
+
 const GRID_SIZE = 6;
 const UNIT_HP = 2;
 const CONTROL_TARGET = 6;
 const MAX_TURNS = 16;
 const BOT_DELAY = 650;
 
+// Prevent double init
+let appInitialized = false;
+
 const $ = (id) => {
   const el = document.getElementById(id);
-  if (!el) {
-    console.warn(`Missing element: ${id}`);
-  }
+  if (!el) console.warn(`Missing element: ${id}`);
   return el;
 };
 
 const setText = (el, value) => {
-  if (el) {
-    el.textContent = value;
-  }
+  if (el) el.textContent = value;
 };
 
 const Utils = {
@@ -27,10 +29,13 @@ const Utils = {
     return Math.min(Math.max(value, min), max);
   },
   formatNumber(value) {
-    return value.toLocaleString("en-US");
+    const n = Number(value);
+    return Number.isFinite(n) ? n.toLocaleString("en-US") : "0";
   },
   percentage(value) {
-    return `${Math.round(value * 100)}%`;
+    const n = Number(value);
+    const safe = Number.isFinite(n) ? n : 0;
+    return `${Math.round(safe * 100)}%`;
   },
   shuffle(list) {
     const result = [...list];
@@ -54,39 +59,43 @@ const getDefaultState = () => ({
 
 const Storage = {
   load() {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return getDefaultState();
     try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return getDefaultState();
       return { ...getDefaultState(), ...JSON.parse(raw) };
-    } catch (error) {
+    } catch {
       return getDefaultState();
     }
   },
   save(state) {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    } catch {
+      // ignore
+    }
   },
   reset() {
-    localStorage.removeItem(STORAGE_KEY);
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+    } catch {
+      // ignore
+    }
     return getDefaultState();
   },
 };
 
 const getCheckpointInfo = (points) => {
-  const current = Math.floor(points / CHECKPOINT_POINTS);
+  const p = Math.max(0, Number(points) || 0);
+  const current = Math.floor(p / CHECKPOINT_POINTS);
   const checkpointBase = current * CHECKPOINT_POINTS;
   const nextValue = (current + 1) * CHECKPOINT_POINTS;
-  const progress = (points - checkpointBase) / CHECKPOINT_POINTS;
+  const progress = (p - checkpointBase) / CHECKPOINT_POINTS;
 
-  return {
-    current,
-    checkpointBase,
-    nextValue,
-    progress,
-  };
+  return { current, checkpointBase, nextValue, progress };
 };
 
 const getWinRate = (state) => {
-  if (state.totalGames === 0) return 0.5;
+  if (!state || state.totalGames === 0) return 0.5;
   return state.wins / state.totalGames;
 };
 
@@ -104,11 +113,7 @@ const calculateAdaptiveChallenge = (state) => {
     0.82
   );
 
-  return {
-    zoneWidth,
-    speed,
-    winRate,
-  };
+  return { zoneWidth, speed, winRate };
 };
 
 const updateAdaptiveState = (state, playerWon) => {
@@ -140,44 +145,67 @@ const CONTROL_NODES = [
   { row: 2, col: 4 },
 ];
 
+const showFatalMissing = (missingIds) => {
+  const bannerId = "fatalMissingBanner";
+  let banner = document.getElementById(bannerId);
+  if (!banner) {
+    banner = document.createElement("div");
+    banner.id = bannerId;
+    banner.style.position = "fixed";
+    banner.style.left = "12px";
+    banner.style.right = "12px";
+    banner.style.bottom = "12px";
+    banner.style.zIndex = "9999";
+    banner.style.padding = "12px 14px";
+    banner.style.borderRadius = "12px";
+    banner.style.background = "rgba(180, 40, 40, 0.92)";
+    banner.style.color = "white";
+    banner.style.fontFamily = "system-ui, -apple-system, Segoe UI, Roboto, Arial";
+    banner.style.boxShadow = "0 10px 30px rgba(0,0,0,0.35)";
+    document.body.appendChild(banner);
+  }
+  banner.textContent = `UI missing required element(s): ${missingIds.join(", ")}. Fix the IDs in index.html to match app.js.`;
+};
+
 const updateTrack = (state, previousLevel = null) => {
   const { current, nextValue, progress } = getCheckpointInfo(state.points);
+
   const trackFill = $("trackFill");
   const dotsContainer = $("checkpointDots");
   const trackPanel = document.querySelector(".track-panel");
 
-  if (!trackFill || !dotsContainer) {
-    return;
-  }
+  // If these are missing, checkpoints can’t render. Don’t crash; just stop.
+  if (!trackFill || !dotsContainer) return;
 
   trackFill.style.width = `${Utils.clamp(progress, 0, 1) * 100}%`;
+
+  // Render dots
   dotsContainer.innerHTML = "";
+  const frag = document.createDocumentFragment();
 
   const dotsToShow = 7;
   const startLevel = Math.max(current - 3, 0);
+
   for (let index = 0; index < dotsToShow; index += 1) {
     const dotLevel = startLevel + index;
+
     const dot = document.createElement("div");
     dot.className = "track-dot";
-    dot.textContent = `${dotLevel}`;
+    dot.setAttribute("aria-label", `Level ${dotLevel}`);
 
     const label = document.createElement("span");
     label.className = "track-dot-label";
     label.textContent = `L${dotLevel}`;
     dot.appendChild(label);
 
-    if (dotLevel < current) {
-      dot.classList.add("reached");
-    }
-    if (dotLevel === current) {
-      dot.classList.add("current");
-    }
-    if (dotLevel === current + 1) {
-      dot.classList.add("next");
-    }
+    if (dotLevel < current) dot.classList.add("reached");
+    if (dotLevel === current) dot.classList.add("current");
+    if (dotLevel === current + 1) dot.classList.add("next");
 
-    dotsContainer.appendChild(dot);
+    frag.appendChild(dot);
   }
+
+  dotsContainer.appendChild(frag);
 
   setText($("checkpointValue"), `${current}`);
   setText($("nextCheckpoint"), `${Utils.formatNumber(nextValue)} pts`);
@@ -197,7 +225,38 @@ const updateScoreboard = (state) => {
 const initApp = () => {
   if (appInitialized) return;
   appInitialized = true;
+
+  console.log("app.js loaded");
+  console.log("init()");
+
   let state = Storage.load();
+
+  // Required elements for core flow
+  const required = [
+    "checkpointScreen",
+    "gameScreen",
+    "playBtn",
+    "backBtn",
+    "startMatchBtn",
+    "endTurnBtn",
+    "resetRunBtn",
+    "gameBoard",
+    "turnBanner",
+
+    // Checkpoint UI
+    "trackFill",
+    "checkpointDots",
+    "checkpointValue",
+    "nextCheckpoint",
+    "pointsValue",
+    "winRateValue",
+  ];
+
+  const missing = required.filter((id) => !document.getElementById(id));
+  if (missing.length) {
+    showFatalMissing(missing);
+    // Still try to render what we can (score/track will no-op if missing)
+  }
 
   const checkpointScreen = $("checkpointScreen");
   const gameScreen = $("gameScreen");
@@ -214,6 +273,7 @@ const initApp = () => {
   const botControlEl = $("botControl");
   const selectedUnitEl = $("selectedUnit");
 
+  // If the core screens/buttons are missing, stop here.
   if (!checkpointScreen || !gameScreen || !playBtn || !backBtn || !startMatchBtn || !endTurnBtn || !resetRunBtn || !gameBoard || !turnBanner) {
     return;
   }
@@ -243,9 +303,7 @@ const initApp = () => {
 
   const setBanner = (message, outcome) => {
     turnBanner.classList.remove("win", "loss");
-    if (outcome) {
-      turnBanner.classList.add(outcome);
-    }
+    if (outcome) turnBanner.classList.add(outcome);
     turnBanner.textContent = message;
   };
 
@@ -304,20 +362,15 @@ const initApp = () => {
     const actions = [];
     getAdjacentTiles(unit.row, unit.col).forEach((tile) => {
       const occupant = getUnitAt(tile.row, tile.col);
-      if (!occupant) {
-        actions.push({ type: "move", unit, to: tile });
-      } else if (occupant.side !== unit.side) {
-        actions.push({ type: "attack", unit, target: occupant, to: tile });
-      }
+      if (!occupant) actions.push({ type: "move", unit, to: tile });
+      else if (occupant.side !== unit.side) actions.push({ type: "attack", unit, target: occupant, to: tile });
     });
     return actions;
   };
 
   const highlightTiles = () => {
     const tiles = gameBoard.querySelectorAll(".grid-tile");
-    tiles.forEach((tile) => {
-      tile.classList.remove("highlight", "attack");
-    });
+    tiles.forEach((tile) => tile.classList.remove("highlight", "attack"));
 
     if (!selectedUnitId) return;
     const selectedUnit = units.find((unit) => unit.id === selectedUnitId);
@@ -340,9 +393,7 @@ const initApp = () => {
         tile.dataset.row = `${row}`;
         tile.dataset.col = `${col}`;
 
-        if (isControlNode(row, col)) {
-          tile.classList.add("control-node");
-        }
+        if (isControlNode(row, col)) tile.classList.add("control-node");
 
         const occupant = getUnitAt(row, col);
         if (occupant) {
@@ -372,29 +423,24 @@ const initApp = () => {
         gameBoard.appendChild(tile);
       }
     }
-
     highlightTiles();
   };
 
-  const countControl = (side) => CONTROL_NODES.filter((node) => {
-    const occupant = getUnitAt(node.row, node.col);
-    return occupant && occupant.side === side;
-  }).length;
+  const countControl = (side) =>
+    CONTROL_NODES.filter((node) => {
+      const occupant = getUnitAt(node.row, node.col);
+      return occupant && occupant.side === side;
+    }).length;
 
   const checkWin = () => {
     const playerUnits = units.filter((unit) => unit.side === "player");
     const botUnits = units.filter((unit) => unit.side === "bot");
 
-    if (playerControl >= CONTROL_TARGET || botUnits.length === 0) {
-      return "player";
-    }
-    if (botControl >= CONTROL_TARGET || playerUnits.length === 0) {
-      return "bot";
-    }
+    if (playerControl >= CONTROL_TARGET || botUnits.length === 0) return "player";
+    if (botControl >= CONTROL_TARGET || playerUnits.length === 0) return "bot";
+
     if (turnCount > MAX_TURNS) {
-      if (playerControl !== botControl) {
-        return playerControl > botControl ? "player" : "bot";
-      }
+      if (playerControl !== botControl) return playerControl > botControl ? "player" : "bot";
       return playerUnits.length >= botUnits.length ? "player" : "bot";
     }
 
@@ -436,9 +482,7 @@ const initApp = () => {
     updateTrack(state, previousLevel);
 
     setBanner(
-      playerWon
-        ? "Victory secured. Checkpoint points locked in."
-        : "Defeat logged. Checkpoints hold the line.",
+      playerWon ? "Victory secured. Checkpoint points locked in." : "Defeat logged. Checkpoints hold the line.",
       playerWon ? "win" : "loss"
     );
   };
@@ -449,9 +493,7 @@ const initApp = () => {
       action.unit.col = action.to.col;
     } else if (action.type === "attack") {
       action.target.hp -= 1;
-      if (action.target.hp <= 0) {
-        units = units.filter((unit) => unit.id !== action.target.id);
-      }
+      if (action.target.hp <= 0) units = units.filter((unit) => unit.id !== action.target.id);
     }
   };
 
@@ -474,7 +516,6 @@ const initApp = () => {
     const action = getValidActions(selectedUnit).find(
       (candidate) => candidate.to.row === row && candidate.to.col === col
     );
-
     if (!action) return;
 
     applyAction(action);
@@ -492,11 +533,9 @@ const initApp = () => {
     );
 
     renderBoard();
+
     const winner = checkWin();
-    if (winner) {
-      resolveMatch(winner);
-      return;
-    }
+    if (winner) return resolveMatch(winner);
 
     endTurnBtn.disabled = false;
   };
@@ -506,14 +545,18 @@ const initApp = () => {
       endTurnBtn.disabled = true;
       return;
     }
+
     if (actionTaken) {
       endTurnBtn.disabled = false;
       return;
     }
+
     const hasActions = units
       .filter((unit) => unit.side === "player")
       .some((unit) => getValidActions(unit).length > 0);
-    endTurnBtn.disabled = hasActions;
+
+    // FIX: enable End Turn if the player can do something OR chooses to pass
+    endTurnBtn.disabled = !hasActions;
   };
 
   const endTurn = () => {
@@ -522,57 +565,48 @@ const initApp = () => {
     playerControl += countControl("player");
     actionTaken = false;
     selectedUnitId = null;
-    const winner = checkWin();
 
+    const winner = checkWin();
     if (winner) {
       renderBoard();
-      resolveMatch(winner);
-      return;
+      return resolveMatch(winner);
     }
+
     activeSide = "bot";
     setBanner("Bot is calculating a response...", null);
     updateMeta();
     renderBoard();
     endTurnBtn.disabled = true;
 
-    botTimeout = setTimeout(() => {
-      botTurn();
-    }, BOT_DELAY);
+    botTimeout = setTimeout(() => botTurn(), BOT_DELAY);
   };
 
   const scoreAction = (action, aggression, pressure) => {
     let score = 0;
+
     if (action.type === "attack") {
       score += 4 + aggression * 4;
-      if (action.target.hp === 1) {
-        score += 4;
-      }
-      if (isControlNode(action.target.row, action.target.col)) {
-        score += 2 + pressure * 2;
-      }
-      if (lastPlayerAction && lastPlayerAction.targetId === action.target.id) {
-        score += 2.5;
-      }
+      if (action.target.hp === 1) score += 4;
+      if (isControlNode(action.target.row, action.target.col)) score += 2 + pressure * 2;
+      if (lastPlayerAction && lastPlayerAction.targetId === action.target.id) score += 2.5;
     } else {
       score += 1 + pressure * 2;
-      if (isControlNode(action.to.row, action.to.col)) {
-        score += 3 + pressure * 2.5;
-      }
+      if (isControlNode(action.to.row, action.to.col)) score += 3 + pressure * 2.5;
+
       const nearbyEnemy = getAdjacentTiles(action.to.row, action.to.col).some((tile) => {
         const occupant = getUnitAt(tile.row, tile.col);
         return occupant && occupant.side === "player";
       });
-      if (nearbyEnemy) {
-        score += aggression * 2.5;
-      }
+      if (nearbyEnemy) score += aggression * 2.5;
+
       if (lastPlayerAction && lastPlayerAction.targetPosition) {
-        const distance = Math.abs(lastPlayerAction.targetPosition.row - action.to.row)
-          + Math.abs(lastPlayerAction.targetPosition.col - action.to.col);
-        if (distance <= 2) {
-          score += 1.5;
-        }
+        const distance =
+          Math.abs(lastPlayerAction.targetPosition.row - action.to.row) +
+          Math.abs(lastPlayerAction.targetPosition.col - action.to.col);
+        if (distance <= 2) score += 1.5;
       }
     }
+
     return score;
   };
 
@@ -582,6 +616,7 @@ const initApp = () => {
     const challenge = calculateAdaptiveChallenge(state);
     const brinkBoost = isOneWinFromCheckpoint(state.points) ? 0.12 : 0;
     const recoveryEase = state.recoveryGames > 0 ? -0.18 : 0;
+
     const aggression = Utils.clamp(
       0.45 + (challenge.winRate - 0.5) * 1.2 + brinkBoost + recoveryEase,
       0.22,
@@ -614,19 +649,18 @@ const initApp = () => {
     }));
 
     scoredActions.sort((a, b) => b.score - a.score);
+
     const bestScore = scoredActions[0].score;
     const bestChoices = scoredActions.filter((entry) => entry.score >= bestScore - 0.5);
     const selected = Utils.shuffle(bestChoices)[0].action;
 
     applyAction(selected);
-
     botControl += countControl("bot");
 
     const winner = checkWin();
     if (winner) {
       renderBoard();
-      resolveMatch(winner);
-      return;
+      return resolveMatch(winner);
     }
 
     activeSide = "player";
@@ -646,14 +680,17 @@ const initApp = () => {
     selectedUnitId = null;
     actionTaken = false;
     lastPlayerAction = null;
+
     createUnits();
     setBanner("Your turn. Select a unit to act.", null);
     updateMeta();
     renderBoard();
     updateEndTurnAvailability();
+
     startMatchBtn.disabled = true;
   };
 
+  // Button wiring
   playBtn.addEventListener("click", () => {
     switchScreen("game");
     startMatch();
@@ -669,22 +706,28 @@ const initApp = () => {
   resetRunBtn.addEventListener("click", () => {
     state = Storage.reset();
     Storage.save(state);
+
     updateScoreboard(state);
     updateTrack(state);
+
     matchActive = false;
     startMatchBtn.disabled = false;
     endTurnBtn.disabled = true;
+
     setBanner("Deploy units to begin the skirmish.", null);
+
     if (botTimeout) {
       clearTimeout(botTimeout);
       botTimeout = null;
     }
   });
 
+  // Initial render
   updateScoreboard(state);
   updateTrack(state);
 };
 
+// Boot
 if (document.readyState === "loading") {
   document.addEventListener("DOMContentLoaded", initApp, { once: true });
 } else {
