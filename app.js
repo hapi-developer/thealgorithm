@@ -230,6 +230,7 @@ const initApp = () => {
     matchScore.textContent = "0 - 0";
     updateResultBanner(resultBanner, null);
   };
+};
 
   const lockGrid = () => {
     cells.forEach((cell) => {
@@ -357,4 +358,4 @@ const initApp = () => {
   resetGrid();
 };
 
-document.addEventListener("DOMContentLoaded", initApp);
+document.addEventListener("DOMContentLoaded", initGame);
