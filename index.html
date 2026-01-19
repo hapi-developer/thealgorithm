@@ -3,98 +3,110 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Passive Adaptive Chat</title>
+  <title>Checkpoint Command</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
   <div class="app">
     <header class="top-bar">
       <div class="brand">
-        <span class="brand-title">Passive Adaptive Chat</span>
-        <span class="brand-subtitle">Local-only, privacy-first</span>
+        <span class="brand-title">Checkpoint Command</span>
+        <span class="brand-subtitle">Strategic duels, infinite levels, checkpoint safety</span>
       </div>
-      <div class="top-actions">
-        <button id="newSessionBtn" class="secondary">New Session</button>
-        <button id="privacyBtn" class="primary">Privacy &amp; Control</button>
+      <div class="scoreboard">
+        <div class="score-card">
+          <span class="score-label">Points</span>
+          <span id="pointsValue" class="score-value">0</span>
+        </div>
+        <div class="score-card">
+          <span class="score-label">Record</span>
+          <span id="recordValue" class="score-value">0W - 0L</span>
+        </div>
       </div>
     </header>
 
-    <main class="chat-shell">
-      <div id="chatWindow" class="chat-window" aria-live="polite"></div>
-      <div id="typingIndicator" class="typing-indicator" aria-hidden="true">
-        <span></span><span></span><span></span>
-      </div>
-      <div id="quickReplies" class="quick-replies" aria-label="Quick replies"></div>
+    <main class="screens">
+      <section id="checkpointScreen" class="screen active">
+        <div class="checkpoint-hero">
+          <h1>Reach the next checkpoint</h1>
+          <p>Every 1,000 points is a level. Wins are +100, losses are -100, but checkpoints lock your progress.</p>
+        </div>
+
+        <div class="track-panel">
+          <div class="track-header">
+            <div>
+              <span class="meta-label">Current Level</span>
+              <span id="checkpointValue" class="meta-value">0</span>
+            </div>
+            <div>
+              <span class="meta-label">Win Rate</span>
+              <span id="winRateValue" class="meta-value">0%</span>
+            </div>
+            <div>
+              <span class="meta-label">Difficulty</span>
+              <span id="difficultyValue" class="meta-value">Calibrating</span>
+            </div>
+          </div>
+          <div class="track" aria-label="Checkpoint progress">
+            <div class="track-line"></div>
+            <div id="trackFill" class="track-fill"></div>
+            <div id="checkpointDots" class="track-dots"></div>
+          </div>
+          <div class="track-footer">
+            <div>
+              <span class="meta-label">Next Checkpoint</span>
+              <span id="nextCheckpoint" class="meta-value">1,000 pts</span>
+            </div>
+            <div>
+              <span class="meta-label">Pressure Round</span>
+              <span id="pressureValue" class="meta-value">Inactive</span>
+            </div>
+            <div>
+              <span class="meta-label">Adaptive Target</span>
+              <span id="fairnessValue" class="meta-value">50% fairness</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="cta-wrap">
+          <button id="playBtn" class="primary">Play Match</button>
+        </div>
+      </section>
+
+      <section id="gameScreen" class="screen">
+        <div class="game-header">
+          <div>
+            <h2>Grid Tactics</h2>
+            <p>Claim sectors on the grid. You move first; the bot adapts to match long-term fairness.</p>
+          </div>
+          <button id="backBtn" class="secondary">Back to Checkpoints</button>
+        </div>
+
+        <div class="game-panel">
+          <div class="turn-info">
+            <div>
+              <span class="meta-label">Turn</span>
+              <span id="turnValue" class="meta-value">Player</span>
+            </div>
+            <div>
+              <span class="meta-label">Match Status</span>
+              <span id="matchStatus" class="meta-value">Ready</span>
+            </div>
+            <div>
+              <span class="meta-label">Score</span>
+              <span id="matchScore" class="meta-value">0 - 0</span>
+            </div>
+          </div>
+          <div id="grid" class="grid" role="grid" aria-label="Strategy grid"></div>
+          <div id="resultBanner" class="result-banner">Start a match to see the outcome.</div>
+          <div class="game-actions">
+            <button id="startMatchBtn" class="primary">Start Match</button>
+            <button id="resetRunBtn" class="secondary">Reset Run</button>
+          </div>
+        </div>
+      </section>
     </main>
-
-    <footer class="composer">
-      <textarea id="messageInput" rows="1" placeholder="Type your message..." aria-label="Message input"></textarea>
-      <button id="sendBtn" class="primary">Send</button>
-    </footer>
   </div>
-
-  <dialog id="privacyModal" class="modal">
-    <form method="dialog" class="modal-content">
-      <header class="modal-header">
-        <h2>Privacy &amp; Control</h2>
-        <button id="closePrivacy" class="icon" aria-label="Close">✕</button>
-      </header>
-
-      <section class="modal-section">
-        <div class="toggle-row">
-          <div>
-            <h3>Adaptive Mode</h3>
-            <p>Allow local personalization based on interaction patterns.</p>
-          </div>
-          <label class="switch">
-            <input type="checkbox" id="adaptiveToggle" checked />
-            <span class="slider"></span>
-          </label>
-        </div>
-
-        <div class="toggle-row">
-          <div>
-            <h3>Data Minimization</h3>
-            <p>Store only aggregated stats, not raw message history.</p>
-          </div>
-          <label class="switch">
-            <input type="checkbox" id="minimizeToggle" />
-            <span class="slider"></span>
-          </label>
-        </div>
-
-        <div class="toggle-row">
-          <div>
-            <h3>Data Retention</h3>
-            <p>Automatically prune data older than the selected window.</p>
-          </div>
-          <select id="retentionSelect">
-            <option value="7">7 days</option>
-            <option value="30" selected>30 days</option>
-            <option value="90">90 days</option>
-          </select>
-        </div>
-      </section>
-
-      <section class="modal-section">
-        <div class="button-row">
-          <button id="exportBtn" class="secondary" type="button">Export Data</button>
-          <button id="resetBtn" class="danger" type="button">Reset All Data</button>
-        </div>
-      </section>
-
-      <section class="modal-section">
-        <details>
-          <summary>Explain Adaptation</summary>
-          <p>
-            This chat adjusts message length, structure, pacing, and interaction format based on
-            passive signals like typing speed, hesitation, and how you respond to optional quick replies.
-            It never uses external services, and it does not infer sensitive personal attributes.
-          </p>
-        </details>
-      </section>
-    </form>
-  </dialog>
 
   <script src="app.js"></script>
 </body>
