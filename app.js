@@ -7,6 +7,7 @@ const BASE_PULSE_SPEED = 0.38;
 const MIN_ZONE_WIDTH = 0.12;
 const MAX_ZONE_WIDTH = 0.32;
 
+const getEl = (id) => {
 const $ = (id) => {
   const el = document.getElementById(id);
   if (!el) {
@@ -128,6 +129,8 @@ const updateAdaptiveState = (state, playerWon) => {
 
 const updateTrack = (state) => {
   const { current, nextValue, progress } = getCheckpointInfo(state.points);
+  const trackFill = getEl("trackFill");
+  const dotsContainer = getEl("checkpointDots");
   const trackFill = $("trackFill");
   const dotsContainer = $("checkpointDots");
 
@@ -155,6 +158,13 @@ const updateTrack = (state) => {
     dotsContainer.appendChild(dot);
   }
 
+  setText(getEl("checkpointValue"), `${current}`);
+  setText(getEl("nextCheckpoint"), `${Utils.formatNumber(nextValue)} pts`);
+};
+
+const updateScoreboard = (state) => {
+  setText(getEl("pointsValue"), Utils.formatNumber(state.points));
+  setText(getEl("winRateValue"), Utils.percentage(getWinRate(state)));
   setText($("checkpointValue"), `${current}`);
   setText($("nextCheckpoint"), `${Utils.formatNumber(nextValue)} pts`);
 };
@@ -180,6 +190,16 @@ const updateResultBanner = (banner, outcome) => {
 const initApp = () => {
   let state = Storage.load();
 
+  const checkpointScreen = getEl("checkpointScreen");
+  const gameScreen = getEl("gameScreen");
+  const playBtn = getEl("playBtn");
+  const backBtn = getEl("backBtn");
+  const startMatchBtn = getEl("startMatchBtn");
+  const stopBtn = getEl("stopBtn");
+  const resetRunBtn = getEl("resetRunBtn");
+  const targetZone = getEl("targetZone");
+  const marker = getEl("marker");
+  const resultBanner = getEl("resultBanner");
   const checkpointScreen = $("checkpointScreen");
   const gameScreen = $("gameScreen");
   const playBtn = $("playBtn");
