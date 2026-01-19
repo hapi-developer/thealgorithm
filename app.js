@@ -195,6 +195,8 @@ const updateScoreboard = (state) => {
 };
 
 const initApp = () => {
+  if (appInitialized) return;
+  appInitialized = true;
   let state = Storage.load();
 
   const checkpointScreen = $("checkpointScreen");
@@ -527,6 +529,8 @@ const initApp = () => {
       resolveMatch(winner);
       return;
     }
+    return score;
+  };
 
     activeSide = "bot";
     setBanner("Bot is calculating a response...", null);
@@ -684,4 +688,8 @@ const initApp = () => {
   updateTrack(state);
 };
 
-initApp();
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", initApp, { once: true });
+} else {
+  initApp();
+}

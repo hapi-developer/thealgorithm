@@ -26,6 +26,16 @@ body {
   color: var(--text);
 }
 
+.app-error {
+  margin: 16px 28px 0;
+  padding: 12px 16px;
+  border-radius: 14px;
+  background: rgba(248, 113, 113, 0.2);
+  border: 1px solid rgba(248, 113, 113, 0.6);
+  color: #fee2e2;
+  font-weight: 600;
+}
+
 .app {
   display: flex;
   flex-direction: column;
