@@ -3,25 +3,99 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Driftline</title>
+  <title>Passive Adaptive Chat</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <canvas id="driftCanvas" aria-label="Driftline game canvas"></canvas>
-  <div class="hud" aria-live="polite">
-    <div class="hud-item">
-      <span class="hud-label">Score</span>
-      <span id="scoreValue" class="hud-value">0</span>
-    </div>
-    <div class="hud-item">
-      <span class="hud-label">Combo</span>
-      <span id="comboValue" class="hud-value">x1</span>
-    </div>
-    <div class="hud-item">
-      <span class="hud-label">Phase</span>
-      <span id="phaseValue" class="hud-value">Spiral Drift</span>
-    </div>
+  <div class="app">
+    <header class="top-bar">
+      <div class="brand">
+        <span class="brand-title">Passive Adaptive Chat</span>
+        <span class="brand-subtitle">Local-only, privacy-first</span>
+      </div>
+      <div class="top-actions">
+        <button id="newSessionBtn" class="secondary">New Session</button>
+        <button id="privacyBtn" class="primary">Privacy &amp; Control</button>
+      </div>
+    </header>
+
+    <main class="chat-shell">
+      <div id="chatWindow" class="chat-window" aria-live="polite"></div>
+      <div id="typingIndicator" class="typing-indicator" aria-hidden="true">
+        <span></span><span></span><span></span>
+      </div>
+      <div id="quickReplies" class="quick-replies" aria-label="Quick replies"></div>
+    </main>
+
+    <footer class="composer">
+      <textarea id="messageInput" rows="1" placeholder="Type your message..." aria-label="Message input"></textarea>
+      <button id="sendBtn" class="primary">Send</button>
+    </footer>
   </div>
-  <script src="script.js"></script>
+
+  <dialog id="privacyModal" class="modal">
+    <form method="dialog" class="modal-content">
+      <header class="modal-header">
+        <h2>Privacy &amp; Control</h2>
+        <button id="closePrivacy" class="icon" aria-label="Close">✕</button>
+      </header>
+
+      <section class="modal-section">
+        <div class="toggle-row">
+          <div>
+            <h3>Adaptive Mode</h3>
+            <p>Allow local personalization based on interaction patterns.</p>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="adaptiveToggle" checked />
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <div class="toggle-row">
+          <div>
+            <h3>Data Minimization</h3>
+            <p>Store only aggregated stats, not raw message history.</p>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="minimizeToggle" />
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <div class="toggle-row">
+          <div>
+            <h3>Data Retention</h3>
+            <p>Automatically prune data older than the selected window.</p>
+          </div>
+          <select id="retentionSelect">
+            <option value="7">7 days</option>
+            <option value="30" selected>30 days</option>
+            <option value="90">90 days</option>
+          </select>
+        </div>
+      </section>
+
+      <section class="modal-section">
+        <div class="button-row">
+          <button id="exportBtn" class="secondary" type="button">Export Data</button>
+          <button id="resetBtn" class="danger" type="button">Reset All Data</button>
+        </div>
+      </section>
+
+      <section class="modal-section">
+        <details>
+          <summary>Explain Adaptation</summary>
+          <p>
+            This chat adjusts message length, structure, pacing, and interaction format based on
+            passive signals like typing speed, hesitation, and how you respond to optional quick replies.
+            It never uses external services, and it does not infer sensitive personal attributes.
+          </p>
+        </details>
+      </section>
+    </form>
+  </dialog>
+
+  <script src="app.js"></script>
 </body>
 </html>
