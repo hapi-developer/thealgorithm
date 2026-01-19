@@ -3,98 +3,91 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Passive Adaptive Chat</title>
+  <title>Checkpoint Clash</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
   <div class="app">
     <header class="top-bar">
       <div class="brand">
-        <span class="brand-title">Passive Adaptive Chat</span>
-        <span class="brand-subtitle">Local-only, privacy-first</span>
+        <span class="brand-title">Checkpoint Clash</span>
+        <span class="brand-subtitle">Beat the bot, reach every 1,000-point checkpoint</span>
       </div>
-      <div class="top-actions">
-        <button id="newSessionBtn" class="secondary">New Session</button>
-        <button id="privacyBtn" class="primary">Privacy &amp; Control</button>
+      <div class="scoreboard">
+        <div class="score-card">
+          <span class="score-label">Points</span>
+          <span id="pointsValue" class="score-value">0</span>
+        </div>
+        <div class="score-card">
+          <span class="score-label">Record</span>
+          <span id="recordValue" class="score-value">0W - 0L</span>
+        </div>
       </div>
     </header>
 
-    <main class="chat-shell">
-      <div id="chatWindow" class="chat-window" aria-live="polite"></div>
-      <div id="typingIndicator" class="typing-indicator" aria-hidden="true">
-        <span></span><span></span><span></span>
-      </div>
-      <div id="quickReplies" class="quick-replies" aria-label="Quick replies"></div>
+    <main class="game-shell">
+      <section class="arena">
+        <div class="arena-header">
+          <h2>Signal Duel</h2>
+          <p>Tap play to draw a signal strength. Higher strength wins. Wins are +100, losses are -100.</p>
+        </div>
+        <div class="duel-board">
+          <div class="fighter-card">
+            <span class="fighter-label">You</span>
+            <span id="playerPower" class="fighter-power">--</span>
+            <span id="playerStatus" class="fighter-status">Ready</span>
+          </div>
+          <div class="vs">VS</div>
+          <div class="fighter-card bot">
+            <span class="fighter-label">Bot</span>
+            <span id="botPower" class="fighter-power">--</span>
+            <span id="botStatus" class="fighter-status">Calibrating</span>
+          </div>
+        </div>
+        <div class="arena-actions">
+          <button id="playBtn" class="primary">Play Duel</button>
+          <button id="resetBtn" class="secondary">Reset Run</button>
+        </div>
+        <div class="arena-foot">
+          <div>
+            <span class="meta-label">Difficulty</span>
+            <span id="difficultyValue" class="meta-value">Balanced</span>
+          </div>
+          <div>
+            <span class="meta-label">Fairness Target</span>
+            <span id="fairnessValue" class="meta-value">50% win rate</span>
+          </div>
+          <div>
+            <span class="meta-label">Next Checkpoint</span>
+            <span id="nextCheckpoint" class="meta-value">1,000 pts</span>
+          </div>
+        </div>
+        <div id="resultBanner" class="result-banner">Your duel result shows here.</div>
+      </section>
+
+      <section class="progress">
+        <header class="progress-header">
+          <h3>Checkpoint Path</h3>
+          <p>Every 1,000 points is a checkpoint. When you're one win away, the bot tightens the odds.</p>
+        </header>
+        <div class="checkpoint-path" id="checkpointPath"></div>
+        <div class="progress-stats">
+          <div>
+            <span class="meta-label">Current Checkpoint</span>
+            <span id="checkpointValue" class="meta-value">0</span>
+          </div>
+          <div>
+            <span class="meta-label">Win Rate</span>
+            <span id="winRateValue" class="meta-value">0%</span>
+          </div>
+          <div>
+            <span class="meta-label">Streak</span>
+            <span id="streakValue" class="meta-value">0</span>
+          </div>
+        </div>
+      </section>
     </main>
-
-    <footer class="composer">
-      <textarea id="messageInput" rows="1" placeholder="Type your message..." aria-label="Message input"></textarea>
-      <button id="sendBtn" class="primary">Send</button>
-    </footer>
   </div>
-
-  <dialog id="privacyModal" class="modal">
-    <form method="dialog" class="modal-content">
-      <header class="modal-header">
-        <h2>Privacy &amp; Control</h2>
-        <button id="closePrivacy" class="icon" aria-label="Close">✕</button>
-      </header>
-
-      <section class="modal-section">
-        <div class="toggle-row">
-          <div>
-            <h3>Adaptive Mode</h3>
-            <p>Allow local personalization based on interaction patterns.</p>
-          </div>
-          <label class="switch">
-            <input type="checkbox" id="adaptiveToggle" checked />
-            <span class="slider"></span>
-          </label>
-        </div>
-
-        <div class="toggle-row">
-          <div>
-            <h3>Data Minimization</h3>
-            <p>Store only aggregated stats, not raw message history.</p>
-          </div>
-          <label class="switch">
-            <input type="checkbox" id="minimizeToggle" />
-            <span class="slider"></span>
-          </label>
-        </div>
-
-        <div class="toggle-row">
-          <div>
-            <h3>Data Retention</h3>
-            <p>Automatically prune data older than the selected window.</p>
-          </div>
-          <select id="retentionSelect">
-            <option value="7">7 days</option>
-            <option value="30" selected>30 days</option>
-            <option value="90">90 days</option>
-          </select>
-        </div>
-      </section>
-
-      <section class="modal-section">
-        <div class="button-row">
-          <button id="exportBtn" class="secondary" type="button">Export Data</button>
-          <button id="resetBtn" class="danger" type="button">Reset All Data</button>
-        </div>
-      </section>
-
-      <section class="modal-section">
-        <details>
-          <summary>Explain Adaptation</summary>
-          <p>
-            This chat adjusts message length, structure, pacing, and interaction format based on
-            passive signals like typing speed, hesitation, and how you respond to optional quick replies.
-            It never uses external services, and it does not infer sensitive personal attributes.
-          </p>
-        </details>
-      </section>
-    </form>
-  </dialog>
 
   <script src="app.js"></script>
 </body>
