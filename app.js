@@ -3,7 +3,6 @@ const CHECKPOINT_POINTS = 1000;
 const POINTS_PER_WIN = 100;
 const POINTS_PER_LOSS = -100;
 const GRID_SIZE = 6;
-const UNITS_PER_SIDE = 3;
 const UNIT_HP = 2;
 const CONTROL_TARGET = 6;
 const MAX_TURNS = 16;
@@ -50,6 +49,7 @@ const getDefaultState = () => ({
   totalGames: 0,
   winRateEma: 0.5,
   volatility: 0.25,
+  recoveryGames: 0,
 });
 
 const Storage = {
@@ -117,6 +117,21 @@ const updateAdaptiveState = (state, playerWon) => {
   state.winRateEma = state.winRateEma + alpha * (reward - state.winRateEma);
   const error = reward - state.winRateEma;
   state.volatility = Utils.clamp(state.volatility * 0.9 + Math.abs(error) * 0.1, 0.12, 0.45);
+};
+
+const isOneWinFromCheckpoint = (points) => {
+  const { nextValue } = getCheckpointInfo(points);
+  return nextValue - points <= POINTS_PER_WIN;
+};
+
+const updateDirectorState = (state, playerWon, pointsBefore) => {
+  if (!playerWon && isOneWinFromCheckpoint(pointsBefore)) {
+    state.recoveryGames = 2;
+    return;
+  }
+  if (state.recoveryGames > 0) {
+    state.recoveryGames = Math.max(state.recoveryGames - 1, 0);
+  }
 };
 
 const CONTROL_NODES = [
@@ -397,6 +412,7 @@ const initApp = () => {
       botTimeout = null;
     }
 
+    const pointsBefore = state.points;
     const previousLevel = getCheckpointInfo(state.points).current;
     const playerWon = winner === "player";
 
@@ -410,6 +426,7 @@ const initApp = () => {
     }
 
     state.totalGames += 1;
+    updateDirectorState(state, playerWon, pointsBefore);
     updateAdaptiveState(state, playerWon);
     Storage.save(state);
 
@@ -562,8 +579,18 @@ const initApp = () => {
     if (!matchActive || activeSide !== "bot") return;
 
     const challenge = calculateAdaptiveChallenge(state);
-    const aggression = Utils.clamp(0.45 + (challenge.winRate - 0.5) * 1.2, 0.25, 0.9);
-    const pressure = Utils.clamp(0.35 + state.winRateEma, 0.3, 0.85);
+    const brinkBoost = isOneWinFromCheckpoint(state.points) ? 0.12 : 0;
+    const recoveryEase = state.recoveryGames > 0 ? -0.18 : 0;
+    const aggression = Utils.clamp(
+      0.45 + (challenge.winRate - 0.5) * 1.2 + brinkBoost + recoveryEase,
+      0.22,
+      0.9
+    );
+    const pressure = Utils.clamp(
+      0.35 + state.winRateEma + brinkBoost + recoveryEase,
+      0.25,
+      0.88
+    );
 
     const possibleActions = units
       .filter((unit) => unit.side === "bot")
