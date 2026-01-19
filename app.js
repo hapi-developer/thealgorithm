@@ -8,6 +8,21 @@ const MIN_ZONE_WIDTH = 0.12;
 const MAX_ZONE_WIDTH = 0.32;
 
 const getEl = (id) => {
+const $ = (id) => {
+  const el = document.getElementById(id);
+  if (!el) {
+    console.warn(`Missing element: ${id}`);
+  }
+  return el;
+};
+
+const setText = (el, value) => {
+  if (el) {
+    el.textContent = value;
+  }
+};
+
+const $ = (id) => {
   const el = document.getElementById(id);
   if (!el) {
     console.warn(`Missing element: ${id}`);
@@ -116,6 +131,8 @@ const updateTrack = (state) => {
   const { current, nextValue, progress } = getCheckpointInfo(state.points);
   const trackFill = getEl("trackFill");
   const dotsContainer = getEl("checkpointDots");
+  const trackFill = $("trackFill");
+  const dotsContainer = $("checkpointDots");
 
   if (!trackFill || !dotsContainer) {
     return;
@@ -148,6 +165,13 @@ const updateTrack = (state) => {
 const updateScoreboard = (state) => {
   setText(getEl("pointsValue"), Utils.formatNumber(state.points));
   setText(getEl("winRateValue"), Utils.percentage(getWinRate(state)));
+  setText($("checkpointValue"), `${current}`);
+  setText($("nextCheckpoint"), `${Utils.formatNumber(nextValue)} pts`);
+};
+
+const updateScoreboard = (state) => {
+  setText($("pointsValue"), Utils.formatNumber(state.points));
+  setText($("winRateValue"), Utils.percentage(getWinRate(state)));
 };
 
 const updateResultBanner = (banner, outcome) => {
@@ -176,6 +200,16 @@ const initApp = () => {
   const targetZone = getEl("targetZone");
   const marker = getEl("marker");
   const resultBanner = getEl("resultBanner");
+  const checkpointScreen = $("checkpointScreen");
+  const gameScreen = $("gameScreen");
+  const playBtn = $("playBtn");
+  const backBtn = $("backBtn");
+  const startMatchBtn = $("startMatchBtn");
+  const stopBtn = $("stopBtn");
+  const resetRunBtn = $("resetRunBtn");
+  const targetZone = $("targetZone");
+  const marker = $("marker");
+  const resultBanner = $("resultBanner");
 
   if (!checkpointScreen || !gameScreen || !playBtn || !backBtn || !startMatchBtn || !stopBtn || !resetRunBtn || !targetZone || !marker || !resultBanner) {
     return;
