@@ -24,6 +24,7 @@
         </div>
       </div>
     </header>
+    <div id="appError" class="app-error" role="alert" hidden></div>
 
     <main class="screens">
       <section id="checkpointScreen" class="screen active">
@@ -47,7 +48,7 @@
           <div class="track-footer">
             <div>
               <span class="meta-label">Next Checkpoint</span>
-              <span id="nextCheckpoint" class="meta-value">1,000 pts</span>
+              <span id="nextCheckpoint" class="meta-value next-checkpoint">1,000 pts</span>
             </div>
           </div>
         </div>
@@ -60,23 +61,47 @@
       <section id="gameScreen" class="screen">
         <div class="game-header">
           <div>
-            <h2>Focus Circuit</h2>
-            <p>Stop the moving pulse inside the target zone. Precision wins the round.</p>
+            <h2>Gridfront Skirmish</h2>
+            <p>Command three units, capture control nodes, and outplay the bot in turn-based clashes.</p>
           </div>
           <button id="backBtn" class="secondary">Back to Checkpoints</button>
         </div>
 
         <div class="game-panel">
-          <div class="meter-tip">Stop the pulse inside the glowing zone. Five rounds decide the match.</div>
-          <div class="focus-meter" role="img" aria-label="Timing meter">
-            <div id="targetZone" class="target-zone"></div>
-            <div id="marker" class="marker"></div>
+          <div class="game-meta">
+            <div class="meta-card">
+              <span class="meta-label">Turn</span>
+              <span><span id="turnOwner">Player</span> · <span id="turnValue">1</span></span>
+            </div>
+            <div class="meta-card">
+              <span class="meta-label">Player Control</span>
+              <span id="playerControl">0</span>
+            </div>
+            <div class="meta-card">
+              <span class="meta-label">Bot Control</span>
+              <span id="botControl">0</span>
+            </div>
+            <div class="meta-card">
+              <span class="meta-label">Selected Unit</span>
+              <span id="selectedUnit">None</span>
+            </div>
           </div>
-          <div id="resultBanner" class="result-banner">Start a match to see the outcome.</div>
+          <div id="turnBanner" class="result-banner">Deploy units to begin the skirmish.</div>
+          <div class="game-grid-wrap">
+            <div id="gameBoard" class="game-grid" role="grid" aria-label="Strategy grid"></div>
+          </div>
           <div class="game-actions">
             <button id="startMatchBtn" class="primary">Start Match</button>
-            <button id="stopBtn" class="secondary" disabled>Stop Pulse</button>
-            <button id="resetRunBtn" class="secondary">Reset Run</button>
+            <button id="endTurnBtn" class="secondary" disabled>End Turn</button>
+            <button id="resetRunBtn" class="secondary">Reset Progress</button>
+          </div>
+          <div class="game-help">
+            <div class="help-title">How to Play</div>
+            <ul>
+              <li>Select one of your units, then click an adjacent tile to move or an adjacent enemy to attack.</li>
+              <li>Control nodes (glowing tiles) add control points at the end of your turn.</li>
+              <li>First to 6 control points or the last side standing wins the match.</li>
+            </ul>
           </div>
         </div>
       </section>

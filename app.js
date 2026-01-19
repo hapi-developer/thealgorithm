@@ -2,12 +2,11 @@ const STORAGE_KEY = "checkpoint_command_state_v1";
 const CHECKPOINT_POINTS = 1000;
 const POINTS_PER_WIN = 100;
 const POINTS_PER_LOSS = -100;
-const ROUNDS_PER_MATCH = 5;
-const BASE_PULSE_SPEED = 0.38;
-const MIN_ZONE_WIDTH = 0.12;
-const MAX_ZONE_WIDTH = 0.32;
-
-console.log("app.js loaded");
+const GRID_SIZE = 6;
+const UNIT_HP = 2;
+const CONTROL_TARGET = 6;
+const MAX_TURNS = 16;
+const BOT_DELAY = 650;
 
 const $ = (id) => {
   const el = document.getElementById(id);
@@ -33,8 +32,13 @@ const Utils = {
   percentage(value) {
     return `${Math.round(value * 100)}%`;
   },
-  ease(value) {
-    return 1 - Math.cos((value * Math.PI) / 2);
+  shuffle(list) {
+    const result = [...list];
+    for (let i = result.length - 1; i > 0; i -= 1) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [result[i], result[j]] = [result[j], result[i]];
+    }
+    return result;
   },
 };
 
@@ -45,6 +49,7 @@ const getDefaultState = () => ({
   totalGames: 0,
   winRateEma: 0.5,
   volatility: 0.25,
+  recoveryGames: 0,
 });
 
 const Storage = {
@@ -91,10 +96,10 @@ const calculateAdaptiveChallenge = (state) => {
   const volatilityLift = Utils.clamp((0.3 - state.volatility) * 0.6, -0.12, 0.18);
   const levelPressure = Math.min(Math.floor(state.points / CHECKPOINT_POINTS) * 0.015, 0.2);
   const baseWidth = 0.24 - emaDrift * 0.18 + volatilityLift - levelPressure;
-  const zoneWidth = Utils.clamp(baseWidth, MIN_ZONE_WIDTH, MAX_ZONE_WIDTH);
+  const zoneWidth = Utils.clamp(baseWidth, 0.12, 0.32);
 
   const speed = Utils.clamp(
-    BASE_PULSE_SPEED + levelPressure * 0.55 + Math.abs(emaDrift) * 0.25,
+    0.38 + levelPressure * 0.55 + Math.abs(emaDrift) * 0.25,
     0.28,
     0.82
   );
@@ -114,10 +119,32 @@ const updateAdaptiveState = (state, playerWon) => {
   state.volatility = Utils.clamp(state.volatility * 0.9 + Math.abs(error) * 0.1, 0.12, 0.45);
 };
 
-const updateTrack = (state) => {
+const isOneWinFromCheckpoint = (points) => {
+  const { nextValue } = getCheckpointInfo(points);
+  return nextValue - points <= POINTS_PER_WIN;
+};
+
+const updateDirectorState = (state, playerWon, pointsBefore) => {
+  if (!playerWon && isOneWinFromCheckpoint(pointsBefore)) {
+    state.recoveryGames = 2;
+    return;
+  }
+  if (state.recoveryGames > 0) {
+    state.recoveryGames = Math.max(state.recoveryGames - 1, 0);
+  }
+};
+
+const CONTROL_NODES = [
+  { row: 1, col: 2 },
+  { row: 4, col: 2 },
+  { row: 2, col: 4 },
+];
+
+const updateTrack = (state, previousLevel = null) => {
   const { current, nextValue, progress } = getCheckpointInfo(state.points);
   const trackFill = $("trackFill");
   const dotsContainer = $("checkpointDots");
+  const trackPanel = document.querySelector(".track-panel");
 
   if (!trackFill || !dotsContainer) {
     return;
@@ -126,13 +153,18 @@ const updateTrack = (state) => {
   trackFill.style.width = `${Utils.clamp(progress, 0, 1) * 100}%`;
   dotsContainer.innerHTML = "";
 
-  const dotsToShow = 6;
-  const startLevel = Math.max(current - 2, 0);
+  const dotsToShow = 7;
+  const startLevel = Math.max(current - 3, 0);
   for (let index = 0; index < dotsToShow; index += 1) {
     const dotLevel = startLevel + index;
     const dot = document.createElement("div");
     dot.className = "track-dot";
     dot.textContent = `${dotLevel}`;
+
+    const label = document.createElement("span");
+    label.className = "track-dot-label";
+    label.textContent = `L${dotLevel}`;
+    dot.appendChild(label);
 
     if (dotLevel < current) {
       dot.classList.add("reached");
@@ -140,12 +172,21 @@ const updateTrack = (state) => {
     if (dotLevel === current) {
       dot.classList.add("current");
     }
+    if (dotLevel === current + 1) {
+      dot.classList.add("next");
+    }
 
     dotsContainer.appendChild(dot);
   }
 
   setText($("checkpointValue"), `${current}`);
   setText($("nextCheckpoint"), `${Utils.formatNumber(nextValue)} pts`);
+
+  if (trackPanel && previousLevel !== null && current > previousLevel) {
+    trackPanel.classList.remove("celebrate");
+    void trackPanel.offsetWidth;
+    trackPanel.classList.add("celebrate");
+  }
 };
 
 const updateScoreboard = (state) => {
@@ -153,48 +194,62 @@ const updateScoreboard = (state) => {
   setText($("winRateValue"), Utils.percentage(getWinRate(state)));
 };
 
-const updateResultBanner = (banner, outcome) => {
-  banner.classList.remove("win", "loss");
-  if (!outcome) {
-    banner.textContent = "Start a match to see the outcome.";
-    return;
-  }
+let appInitialized = false;
 
-  banner.classList.add(outcome === "win" ? "win" : "loss");
-  banner.textContent = outcome === "win"
-    ? "Victory. +100 points locked in at your checkpoint."
-    : "Defeat. -100 points, but checkpoints prevent further drops.";
+const showAppError = (message) => {
+  const errorEl = $("appError");
+  if (!errorEl) return;
+  errorEl.textContent = message;
+  errorEl.hidden = false;
 };
 
 const initApp = () => {
+  if (appInitialized) return;
+  appInitialized = true;
   let state = Storage.load();
-
-  console.log("init()");
 
   const checkpointScreen = $("checkpointScreen");
   const gameScreen = $("gameScreen");
   const playBtn = $("playBtn");
   const backBtn = $("backBtn");
   const startMatchBtn = $("startMatchBtn");
-  const stopBtn = $("stopBtn");
+  const endTurnBtn = $("endTurnBtn");
   const resetRunBtn = $("resetRunBtn");
-  const targetZone = $("targetZone");
-  const marker = $("marker");
-  const resultBanner = $("resultBanner");
+  const gameBoard = $("gameBoard");
+  const turnBanner = $("turnBanner");
+  const turnOwner = $("turnOwner");
+  const turnValue = $("turnValue");
+  const playerControlEl = $("playerControl");
+  const botControlEl = $("botControl");
+  const selectedUnitEl = $("selectedUnit");
 
-  if (!checkpointScreen || !gameScreen || !playBtn || !backBtn || !startMatchBtn || !stopBtn || !resetRunBtn || !targetZone || !marker || !resultBanner) {
+  const missingCritical = [
+    ["checkpointScreen", checkpointScreen],
+    ["gameScreen", gameScreen],
+    ["playBtn", playBtn],
+    ["backBtn", backBtn],
+    ["startMatchBtn", startMatchBtn],
+    ["endTurnBtn", endTurnBtn],
+    ["resetRunBtn", resetRunBtn],
+    ["gameBoard", gameBoard],
+    ["turnBanner", turnBanner],
+  ].filter(([, el]) => !el).map(([name]) => name);
+
+  if (missingCritical.length > 0) {
+    showAppError(`Missing critical UI elements: ${missingCritical.join(", ")}.`);
     return;
   }
 
   let matchActive = false;
-  let roundsPlayed = 0;
-  let roundsWon = 0;
-  let pulseSpeed = BASE_PULSE_SPEED;
-  let pulseWidth = 0.2;
-  let pulsePosition = 0.1;
-  let pulseDirection = 1;
-  let frameId = null;
-  let lastFrameTime = 0;
+  let activeSide = "player";
+  let turnCount = 1;
+  let playerControl = 0;
+  let botControl = 0;
+  let selectedUnitId = null;
+  let actionTaken = false;
+  let units = [];
+  let lastPlayerAction = null;
+  let botTimeout = null;
 
   const switchScreen = (target) => {
     if (target === "game") {
@@ -206,41 +261,186 @@ const initApp = () => {
     }
   };
 
-  const resetPulse = () => {
-    pulsePosition = Math.random() * 0.6 + 0.2;
-    pulseDirection = Math.random() > 0.5 ? 1 : -1;
-    marker.style.left = `${pulsePosition * 100}%`;
-  };
+  const getUnitAt = (row, col) => units.find((unit) => unit.row === row && unit.col === col);
 
-  const updateZone = () => {
-    const zoneStart = Utils.clamp(Math.random() * (1 - pulseWidth), 0.05, 0.75);
-    targetZone.style.left = `${zoneStart * 100}%`;
-    targetZone.style.width = `${pulseWidth * 100}%`;
-  };
-
-  const updateResult = (message, outcome) => {
-    updateResultBanner(resultBanner, outcome);
-    if (message) {
-      resultBanner.textContent = message;
+  const setBanner = (message, outcome) => {
+    turnBanner.classList.remove("win", "loss");
+    if (outcome) {
+      turnBanner.classList.add(outcome);
     }
+    turnBanner.textContent = message;
   };
 
-  const stopAnimation = () => {
-    if (frameId) {
-      cancelAnimationFrame(frameId);
-      frameId = null;
+  const updateMeta = () => {
+    setText(turnOwner, activeSide === "player" ? "Player" : "Bot");
+    setText(turnValue, `${turnCount}`);
+    setText(playerControlEl, `${playerControl}`);
+    setText(botControlEl, `${botControl}`);
+    const selectedUnit = units.find((unit) => unit.id === selectedUnitId);
+    setText(selectedUnitEl, selectedUnit ? selectedUnit.label : "None");
+  };
+
+  const createUnits = () => {
+    const playerStarts = [
+      { row: 5, col: 1 },
+      { row: 5, col: 3 },
+      { row: 5, col: 5 },
+    ];
+    const botStarts = [
+      { row: 0, col: 0 },
+      { row: 0, col: 2 },
+      { row: 0, col: 4 },
+    ];
+
+    const playerUnits = playerStarts.map((pos, index) => ({
+      id: `p${index + 1}`,
+      side: "player",
+      row: pos.row,
+      col: pos.col,
+      hp: UNIT_HP,
+      label: `P-${index + 1}`,
+    }));
+
+    const botUnits = botStarts.map((pos, index) => ({
+      id: `b${index + 1}`,
+      side: "bot",
+      row: pos.row,
+      col: pos.col,
+      hp: UNIT_HP,
+      label: `B-${index + 1}`,
+    }));
+
+    units = [...playerUnits, ...botUnits];
+  };
+
+  const isControlNode = (row, col) => CONTROL_NODES.some((node) => node.row === row && node.col === col);
+
+  const getAdjacentTiles = (row, col) => [
+    { row: row - 1, col },
+    { row: row + 1, col },
+    { row, col: col - 1 },
+    { row, col: col + 1 },
+  ].filter((tile) => tile.row >= 0 && tile.row < GRID_SIZE && tile.col >= 0 && tile.col < GRID_SIZE);
+
+  const getValidActions = (unit) => {
+    const actions = [];
+    getAdjacentTiles(unit.row, unit.col).forEach((tile) => {
+      const occupant = getUnitAt(tile.row, tile.col);
+      if (!occupant) {
+        actions.push({ type: "move", unit, to: tile });
+      } else if (occupant.side !== unit.side) {
+        actions.push({ type: "attack", unit, target: occupant, to: tile });
+      }
+    });
+    return actions;
+  };
+
+  const highlightTiles = () => {
+    const tiles = gameBoard.querySelectorAll(".grid-tile");
+    tiles.forEach((tile) => {
+      tile.classList.remove("highlight", "attack");
+    });
+
+    if (!selectedUnitId) return;
+    const selectedUnit = units.find((unit) => unit.id === selectedUnitId);
+    if (!selectedUnit) return;
+
+    getValidActions(selectedUnit).forEach((action) => {
+      const tile = gameBoard.querySelector(`[data-row='${action.to.row}'][data-col='${action.to.col}']`);
+      if (!tile) return;
+      tile.classList.add(action.type === "attack" ? "attack" : "highlight");
+    });
+  };
+
+  const renderBoard = () => {
+    gameBoard.innerHTML = "";
+    for (let row = 0; row < GRID_SIZE; row += 1) {
+      for (let col = 0; col < GRID_SIZE; col += 1) {
+        const tile = document.createElement("button");
+        tile.type = "button";
+        tile.className = "grid-tile";
+        tile.dataset.row = `${row}`;
+        tile.dataset.col = `${col}`;
+
+        if (isControlNode(row, col)) {
+          tile.classList.add("control-node");
+        }
+
+        const occupant = getUnitAt(row, col);
+        if (occupant) {
+          const unitEl = document.createElement("div");
+          unitEl.className = `unit ${occupant.side}`;
+
+          const label = document.createElement("div");
+          label.className = "unit-label";
+          label.textContent = occupant.label;
+
+          const hpWrap = document.createElement("div");
+          hpWrap.className = "unit-hp";
+          for (let hp = 0; hp < occupant.hp; hp += 1) {
+            const dot = document.createElement("span");
+            dot.className = "hp-dot";
+            hpWrap.appendChild(dot);
+          }
+
+          unitEl.appendChild(label);
+          unitEl.appendChild(hpWrap);
+          tile.appendChild(unitEl);
+        } else if (isControlNode(row, col)) {
+          tile.textContent = "Node";
+        }
+
+        tile.addEventListener("click", () => handleTileClick(row, col));
+        gameBoard.appendChild(tile);
+      }
     }
+
+    highlightTiles();
   };
 
-  const resolveMatch = () => {
+  const countControl = (side) => CONTROL_NODES.filter((node) => {
+    const occupant = getUnitAt(node.row, node.col);
+    return occupant && occupant.side === side;
+  }).length;
+
+  const checkWin = () => {
+    const playerUnits = units.filter((unit) => unit.side === "player");
+    const botUnits = units.filter((unit) => unit.side === "bot");
+
+    if (playerControl >= CONTROL_TARGET || botUnits.length === 0) {
+      return "player";
+    }
+    if (botControl >= CONTROL_TARGET || playerUnits.length === 0) {
+      return "bot";
+    }
+    if (turnCount > MAX_TURNS) {
+      if (playerControl !== botControl) {
+        return playerControl > botControl ? "player" : "bot";
+      }
+      return playerUnits.length >= botUnits.length ? "player" : "bot";
+    }
+
+    return null;
+  };
+
+  const resolveMatch = (winner) => {
     matchActive = false;
-    stopAnimation();
-    stopBtn.disabled = true;
+    activeSide = "player";
+    selectedUnitId = null;
+    actionTaken = false;
     startMatchBtn.disabled = false;
+    endTurnBtn.disabled = true;
 
-    const playerWins = roundsWon >= Math.ceil(ROUNDS_PER_MATCH / 2);
+    if (botTimeout) {
+      clearTimeout(botTimeout);
+      botTimeout = null;
+    }
 
-    if (playerWins) {
+    const pointsBefore = state.points;
+    const previousLevel = getCheckpointInfo(state.points).current;
+    const playerWon = winner === "player";
+
+    if (playerWon) {
       state.points += POINTS_PER_WIN;
       state.wins += 1;
     } else {
@@ -250,78 +450,231 @@ const initApp = () => {
     }
 
     state.totalGames += 1;
-    updateAdaptiveState(state, playerWins);
+    updateDirectorState(state, playerWon, pointsBefore);
+    updateAdaptiveState(state, playerWon);
     Storage.save(state);
 
     updateScoreboard(state);
-    updateTrack(state);
-    updateResult(playerWins ? "Victory. +100 points locked in at your checkpoint." : "Defeat. -100 points, but checkpoints prevent further drops.", playerWins ? "win" : "loss");
+    updateTrack(state, previousLevel);
+
+    setBanner(
+      playerWon
+        ? "Victory secured. Checkpoint points locked in."
+        : "Defeat logged. Checkpoints hold the line.",
+      playerWon ? "win" : "loss"
+    );
   };
 
-  const evaluateRound = () => {
-    const zoneLeft = parseFloat(targetZone.style.left) / 100;
-    const zoneWidth = parseFloat(targetZone.style.width) / 100;
-    const zoneRight = zoneLeft + zoneWidth;
-    const hit = pulsePosition >= zoneLeft && pulsePosition <= zoneRight;
-    roundsPlayed += 1;
-    if (hit) {
-      roundsWon += 1;
+  const applyAction = (action) => {
+    if (action.type === "move") {
+      action.unit.row = action.to.row;
+      action.unit.col = action.to.col;
+    } else if (action.type === "attack") {
+      action.target.hp -= 1;
+      if (action.target.hp <= 0) {
+        units = units.filter((unit) => unit.id !== action.target.id);
+      }
     }
+  };
 
-    const roundsRemaining = ROUNDS_PER_MATCH - roundsPlayed;
-    if (roundsRemaining <= 0) {
-      resolveMatch();
+  const handleTileClick = (row, col) => {
+    if (!matchActive || activeSide !== "player") return;
+
+    const clickedUnit = getUnitAt(row, col);
+    if (clickedUnit && clickedUnit.side === "player" && !actionTaken) {
+      selectedUnitId = clickedUnit.id;
+      updateMeta();
+      highlightTiles();
       return;
     }
 
-    updateResult(hit ? "Hit. Keep the rhythm." : "Missed. Refocus and try again.", hit ? "win" : "loss");
-    updateZone();
-    resetPulse();
-  };
+    if (!selectedUnitId || actionTaken) return;
 
-  const tick = (timestamp) => {
-    if (!matchActive) {
-      stopAnimation();
+    const selectedUnit = units.find((unit) => unit.id === selectedUnitId);
+    if (!selectedUnit) return;
+
+    const action = getValidActions(selectedUnit).find(
+      (candidate) => candidate.to.row === row && candidate.to.col === col
+    );
+
+    if (!action) return;
+
+    applyAction(action);
+    actionTaken = true;
+    selectedUnitId = null;
+    lastPlayerAction = {
+      type: action.type,
+      targetId: action.type === "attack" ? action.target.id : null,
+      targetPosition: action.to,
+    };
+
+    setBanner(
+      action.type === "attack" ? "Strike landed. Pressure the bot." : "Unit repositioned. Control the lanes.",
+      null
+    );
+
+    renderBoard();
+    const winner = checkWin();
+    if (winner) {
+      resolveMatch(winner);
       return;
     }
 
-    if (!lastFrameTime) {
-      lastFrameTime = timestamp;
+    endTurnBtn.disabled = false;
+  };
+
+  const updateEndTurnAvailability = () => {
+    if (!matchActive || activeSide !== "player") {
+      endTurnBtn.disabled = true;
+      return;
+    }
+    if (actionTaken) {
+      endTurnBtn.disabled = false;
+      return;
+    }
+    const hasActions = units
+      .filter((unit) => unit.side === "player")
+      .some((unit) => getValidActions(unit).length > 0);
+    endTurnBtn.disabled = hasActions;
+  };
+
+  const endTurn = () => {
+    if (!matchActive || activeSide !== "player") return;
+
+    playerControl += countControl("player");
+    actionTaken = false;
+    selectedUnitId = null;
+    const winner = checkWin();
+
+    if (winner) {
+      renderBoard();
+      resolveMatch(winner);
+      return;
     }
 
-    const delta = (timestamp - lastFrameTime) / 1000;
-    lastFrameTime = timestamp;
-    pulsePosition += delta * pulseSpeed * pulseDirection;
+    activeSide = "bot";
+    setBanner("Bot is calculating a response...", null);
+    updateMeta();
+    renderBoard();
+    endTurnBtn.disabled = true;
 
-    if (pulsePosition >= 0.98) {
-      pulsePosition = 0.98;
-      pulseDirection = -1;
+    botTimeout = setTimeout(() => {
+      botTurn();
+    }, BOT_DELAY);
+  };
+
+  const scoreAction = (action, aggression, pressure) => {
+    let score = 0;
+    if (action.type === "attack") {
+      score += 4 + aggression * 4;
+      if (action.target.hp === 1) {
+        score += 4;
+      }
+      if (isControlNode(action.target.row, action.target.col)) {
+        score += 2 + pressure * 2;
+      }
+      if (lastPlayerAction && lastPlayerAction.targetId === action.target.id) {
+        score += 2.5;
+      }
+    } else {
+      score += 1 + pressure * 2;
+      if (isControlNode(action.to.row, action.to.col)) {
+        score += 3 + pressure * 2.5;
+      }
+      const nearbyEnemy = getAdjacentTiles(action.to.row, action.to.col).some((tile) => {
+        const occupant = getUnitAt(tile.row, tile.col);
+        return occupant && occupant.side === "player";
+      });
+      if (nearbyEnemy) {
+        score += aggression * 2.5;
+      }
+      if (lastPlayerAction && lastPlayerAction.targetPosition) {
+        const distance = Math.abs(lastPlayerAction.targetPosition.row - action.to.row)
+          + Math.abs(lastPlayerAction.targetPosition.col - action.to.col);
+        if (distance <= 2) {
+          score += 1.5;
+        }
+      }
     }
-    if (pulsePosition <= 0.02) {
-      pulsePosition = 0.02;
-      pulseDirection = 1;
+    return score;
+  };
+
+  const botTurn = () => {
+    if (!matchActive || activeSide !== "bot") return;
+
+    const challenge = calculateAdaptiveChallenge(state);
+    const brinkBoost = isOneWinFromCheckpoint(state.points) ? 0.12 : 0;
+    const recoveryEase = state.recoveryGames > 0 ? -0.18 : 0;
+    const aggression = Utils.clamp(
+      0.45 + (challenge.winRate - 0.5) * 1.2 + brinkBoost + recoveryEase,
+      0.22,
+      0.9
+    );
+    const pressure = Utils.clamp(
+      0.35 + state.winRateEma + brinkBoost + recoveryEase,
+      0.25,
+      0.88
+    );
+
+    const possibleActions = units
+      .filter((unit) => unit.side === "bot")
+      .flatMap((unit) => getValidActions(unit));
+
+    if (possibleActions.length === 0) {
+      botControl += countControl("bot");
+      activeSide = "player";
+      turnCount += 1;
+      setBanner("Bot holds position. Your move.", null);
+      updateMeta();
+      renderBoard();
+      updateEndTurnAvailability();
+      return;
     }
 
-    marker.style.left = `${pulsePosition * 100}%`;
-    frameId = requestAnimationFrame(tick);
+    const scoredActions = possibleActions.map((action) => ({
+      action,
+      score: scoreAction(action, aggression, pressure),
+    }));
+
+    scoredActions.sort((a, b) => b.score - a.score);
+    const bestScore = scoredActions[0].score;
+    const bestChoices = scoredActions.filter((entry) => entry.score >= bestScore - 0.5);
+    const selected = Utils.shuffle(bestChoices)[0].action;
+
+    applyAction(selected);
+
+    botControl += countControl("bot");
+
+    const winner = checkWin();
+    if (winner) {
+      renderBoard();
+      resolveMatch(winner);
+      return;
+    }
+
+    activeSide = "player";
+    turnCount += 1;
+    setBanner(selected.type === "attack" ? "Bot strikes back. Your turn." : "Bot repositions. Your move.", null);
+    updateMeta();
+    renderBoard();
+    updateEndTurnAvailability();
   };
 
   const startMatch = () => {
-    const challenge = calculateAdaptiveChallenge(state);
-    pulseWidth = challenge.zoneWidth;
-    pulseSpeed = challenge.speed;
-    roundsPlayed = 0;
-    roundsWon = 0;
-    lastFrameTime = 0;
     matchActive = true;
+    activeSide = "player";
+    turnCount = 1;
+    playerControl = 0;
+    botControl = 0;
+    selectedUnitId = null;
+    actionTaken = false;
+    lastPlayerAction = null;
+    createUnits();
+    setBanner("Your turn. Select a unit to act.", null);
+    updateMeta();
+    renderBoard();
+    updateEndTurnAvailability();
     startMatchBtn.disabled = true;
-    stopBtn.disabled = false;
-    updateZone();
-    resetPulse();
-    updateTrack(state);
-    updateResult("Round started. Stop the pulse inside the target zone.", null);
-    stopAnimation();
-    frameId = requestAnimationFrame(tick);
   };
 
   playBtn.addEventListener("click", () => {
@@ -334,11 +687,7 @@ const initApp = () => {
   });
 
   startMatchBtn.addEventListener("click", startMatch);
-
-  stopBtn.addEventListener("click", () => {
-    if (!matchActive) return;
-    evaluateRound();
-  });
+  endTurnBtn.addEventListener("click", endTurn);
 
   resetRunBtn.addEventListener("click", () => {
     state = Storage.reset();
@@ -346,16 +695,21 @@ const initApp = () => {
     updateScoreboard(state);
     updateTrack(state);
     matchActive = false;
-    stopAnimation();
     startMatchBtn.disabled = false;
-    stopBtn.disabled = true;
-    updateResultBanner(resultBanner, null);
-    resetPulse();
+    endTurnBtn.disabled = true;
+    setBanner("Deploy units to begin the skirmish.", null);
+    if (botTimeout) {
+      clearTimeout(botTimeout);
+      botTimeout = null;
+    }
   });
 
   updateScoreboard(state);
   updateTrack(state);
-  resetPulse();
 };
 
-initApp();
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", initApp, { once: true });
+} else {
+  initApp();
+}
