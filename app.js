@@ -6,6 +6,20 @@ const TRACK_SEGMENTS = 10;
 const GRID_SIZE = 5;
 const MAX_MATCH_TURNS = 16;
 
+const $ = (id) => {
+  const el = document.getElementById(id);
+  if (!el) {
+    console.warn(`Missing element: ${id}`);
+  }
+  return el;
+};
+
+const setText = (el, value) => {
+  if (el) {
+    el.textContent = value;
+  }
+};
+
 const Utils = {
   clamp(value, min, max) {
     return Math.min(Math.max(value, min), max);
@@ -130,8 +144,12 @@ const createGrid = (container, onCellClick) => {
 
 const updateTrack = (state) => {
   const { current, nextValue, progress } = getCheckpointInfo(state.points);
-  const trackFill = document.getElementById("trackFill");
-  const dotsContainer = document.getElementById("checkpointDots");
+  const trackFill = $("trackFill");
+  const dotsContainer = $("checkpointDots");
+
+  if (!trackFill || !dotsContainer) {
+    return;
+  }
 
   trackFill.style.width = `${Utils.clamp(progress, 0, 1) * 100}%`;
   dotsContainer.innerHTML = "";
@@ -153,19 +171,19 @@ const updateTrack = (state) => {
     dotsContainer.appendChild(dot);
   }
 
-  document.getElementById("checkpointValue").textContent = `${current}`;
-  document.getElementById("nextCheckpoint").textContent = `${Utils.formatNumber(nextValue)} pts`;
-  document.getElementById("difficultyValue").textContent = getDifficultyLabel(state.points);
+  setText($("checkpointValue"), `${current}`);
+  setText($("nextCheckpoint"), `${Utils.formatNumber(nextValue)} pts`);
+  setText($("difficultyValue"), getDifficultyLabel(state.points));
 
   const { winChance, oneWinAway } = calculateAdaptiveChance(state);
-  document.getElementById("fairnessValue").textContent = `Target ${Utils.percentage(winChance)}`;
-  document.getElementById("pressureValue").textContent = oneWinAway ? "Active" : "Inactive";
-  document.getElementById("winRateValue").textContent = Utils.percentage(getWinRate(state));
+  setText($("fairnessValue"), `Target ${Utils.percentage(winChance)}`);
+  setText($("pressureValue"), oneWinAway ? "Active" : "Inactive");
+  setText($("winRateValue"), Utils.percentage(getWinRate(state)));
 };
 
 const updateScoreboard = (state) => {
-  document.getElementById("pointsValue").textContent = Utils.formatNumber(state.points);
-  document.getElementById("recordValue").textContent = `${state.wins}W - ${state.losses}L`;
+  setText($("pointsValue"), Utils.formatNumber(state.points));
+  setText($("recordValue"), `${state.wins}W - ${state.losses}L`);
 };
 
 const updateResultBanner = (banner, outcome) => {
@@ -184,17 +202,21 @@ const updateResultBanner = (banner, outcome) => {
 const initApp = () => {
   let state = Storage.load();
 
-  const checkpointScreen = document.getElementById("checkpointScreen");
-  const gameScreen = document.getElementById("gameScreen");
-  const playBtn = document.getElementById("playBtn");
-  const backBtn = document.getElementById("backBtn");
-  const startMatchBtn = document.getElementById("startMatchBtn");
-  const resetRunBtn = document.getElementById("resetRunBtn");
-  const grid = document.getElementById("grid");
-  const resultBanner = document.getElementById("resultBanner");
-  const turnValue = document.getElementById("turnValue");
-  const matchStatus = document.getElementById("matchStatus");
-  const matchScore = document.getElementById("matchScore");
+  const checkpointScreen = $("checkpointScreen");
+  const gameScreen = $("gameScreen");
+  const playBtn = $("playBtn");
+  const backBtn = $("backBtn");
+  const startMatchBtn = $("startMatchBtn");
+  const resetRunBtn = $("resetRunBtn");
+  const grid = $("grid");
+  const resultBanner = $("resultBanner");
+  const turnValue = $("turnValue");
+  const matchStatus = $("matchStatus");
+  const matchScore = $("matchScore");
+
+  if (!checkpointScreen || !gameScreen || !playBtn || !backBtn || !startMatchBtn || !resetRunBtn || !grid || !resultBanner || !turnValue || !matchStatus || !matchScore) {
+    return;
+  }
 
   let cells = [];
   let playerTurn = true;
@@ -230,7 +252,6 @@ const initApp = () => {
     matchScore.textContent = "0 - 0";
     updateResultBanner(resultBanner, null);
   };
-};
 
   const lockGrid = () => {
     cells.forEach((cell) => {
@@ -358,4 +379,4 @@ const initApp = () => {
   resetGrid();
 };
 
-document.addEventListener("DOMContentLoaded", initGame);
+document.addEventListener("DOMContentLoaded", initApp);
