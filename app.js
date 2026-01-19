@@ -529,9 +529,6 @@ const initApp = () => {
       resolveMatch(winner);
       return;
     }
-    return score;
-  };
-
     activeSide = "bot";
     setBanner("Bot is calculating a response...", null);
     updateMeta();
