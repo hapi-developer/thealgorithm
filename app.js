@@ -194,15 +194,6 @@ const updateScoreboard = (state) => {
   setText($("winRateValue"), Utils.percentage(getWinRate(state)));
 };
 
-let appInitialized = false;
-
-const showAppError = (message) => {
-  const errorEl = $("appError");
-  if (!errorEl) return;
-  errorEl.textContent = message;
-  errorEl.hidden = false;
-};
-
 const initApp = () => {
   if (appInitialized) return;
   appInitialized = true;
@@ -223,20 +214,7 @@ const initApp = () => {
   const botControlEl = $("botControl");
   const selectedUnitEl = $("selectedUnit");
 
-  const missingCritical = [
-    ["checkpointScreen", checkpointScreen],
-    ["gameScreen", gameScreen],
-    ["playBtn", playBtn],
-    ["backBtn", backBtn],
-    ["startMatchBtn", startMatchBtn],
-    ["endTurnBtn", endTurnBtn],
-    ["resetRunBtn", resetRunBtn],
-    ["gameBoard", gameBoard],
-    ["turnBanner", turnBanner],
-  ].filter(([, el]) => !el).map(([name]) => name);
-
-  if (missingCritical.length > 0) {
-    showAppError(`Missing critical UI elements: ${missingCritical.join(", ")}.`);
+  if (!checkpointScreen || !gameScreen || !playBtn || !backBtn || !startMatchBtn || !endTurnBtn || !resetRunBtn || !gameBoard || !turnBanner) {
     return;
   }
 
@@ -551,6 +529,8 @@ const initApp = () => {
       resolveMatch(winner);
       return;
     }
+    return score;
+  };
 
     activeSide = "bot";
     setBanner("Bot is calculating a response...", null);
