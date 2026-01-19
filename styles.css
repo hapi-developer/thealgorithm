@@ -273,50 +273,40 @@ button:disabled {
   gap: 20px;
 }
 
-.turn-info {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 12px;
-  background: rgba(15, 23, 42, 0.6);
-  border-radius: 16px;
-  padding: 16px;
-  border: 1px solid var(--border);
-}
-
-.grid {
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 8px;
-}
-
-.grid-cell {
-  background: rgba(15, 23, 42, 0.8);
-  border: 1px solid rgba(148, 163, 184, 0.2);
-  border-radius: 12px;
-  aspect-ratio: 1 / 1;
-  display: grid;
-  place-items: center;
-  font-weight: 700;
-  font-size: 1.1rem;
+.meter-tip {
   color: var(--muted);
-  cursor: pointer;
-  transition: background 0.2s ease, transform 0.2s ease;
+  font-size: 0.95rem;
 }
 
-.grid-cell:hover {
-  transform: translateY(-2px);
+.focus-meter {
+  position: relative;
+  height: 80px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid var(--border);
+  overflow: hidden;
+  box-shadow: inset 0 0 24px rgba(15, 23, 42, 0.6);
 }
 
-.grid-cell.player {
-  background: rgba(56, 189, 248, 0.35);
-  border-color: rgba(56, 189, 248, 0.6);
-  color: var(--text);
+.target-zone {
+  position: absolute;
+  top: 10px;
+  bottom: 10px;
+  border-radius: 999px;
+  background: rgba(34, 197, 94, 0.25);
+  border: 1px solid rgba(34, 197, 94, 0.6);
+  box-shadow: 0 0 18px rgba(34, 197, 94, 0.35);
 }
 
-.grid-cell.bot {
-  background: rgba(248, 113, 113, 0.25);
-  border-color: rgba(248, 113, 113, 0.6);
-  color: var(--text);
+.marker {
+  position: absolute;
+  top: 6px;
+  bottom: 6px;
+  width: 14px;
+  border-radius: 999px;
+  background: var(--primary);
+  box-shadow: 0 0 12px rgba(56, 189, 248, 0.7);
+  transform: translateX(-50%);
 }
 
 .result-banner {

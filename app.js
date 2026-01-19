@@ -2,9 +2,24 @@ const STORAGE_KEY = "checkpoint_command_state_v1";
 const CHECKPOINT_POINTS = 1000;
 const POINTS_PER_WIN = 100;
 const POINTS_PER_LOSS = -100;
-const TRACK_SEGMENTS = 10;
-const GRID_SIZE = 5;
-const MAX_MATCH_TURNS = 16;
+const ROUNDS_PER_MATCH = 5;
+const BASE_PULSE_SPEED = 0.38;
+const MIN_ZONE_WIDTH = 0.12;
+const MAX_ZONE_WIDTH = 0.32;
+
+const $ = (id) => {
+  const el = document.getElementById(id);
+  if (!el) {
+    console.warn(`Missing element: ${id}`);
+  }
+  return el;
+};
+
+const setText = (el, value) => {
+  if (el) {
+    el.textContent = value;
+  }
+};
 
 const Utils = {
   clamp(value, min, max) {
@@ -63,43 +78,29 @@ const getCheckpointInfo = (points) => {
   };
 };
 
-const getDifficultyLabel = (points) => {
-  const level = Math.floor(points / CHECKPOINT_POINTS);
-  if (level >= 12) return "Apex";
-  if (level >= 8) return "Expert";
-  if (level >= 5) return "Advanced";
-  if (level >= 2) return "Focused";
-  return "Calibrating";
-};
-
 const getWinRate = (state) => {
   if (state.totalGames === 0) return 0.5;
   return state.wins / state.totalGames;
 };
 
-const calculateAdaptiveChance = (state) => {
-  const empiricalWinRate = getWinRate(state);
-  const ema = state.winRateEma;
-  const level = Math.floor(state.points / CHECKPOINT_POINTS);
-  const { progress } = getCheckpointInfo(state.points);
-  const oneWinAway = progress >= 0.9 && progress < 1;
+const calculateAdaptiveChallenge = (state) => {
+  const winRate = getWinRate(state);
+  const emaDrift = Utils.clamp(state.winRateEma - 0.5, -0.25, 0.25);
+  const volatilityLift = Utils.clamp((0.3 - state.volatility) * 0.6, -0.12, 0.18);
+  const levelPressure = Math.min(Math.floor(state.points / CHECKPOINT_POINTS) * 0.015, 0.2);
+  const baseWidth = 0.24 - emaDrift * 0.18 + volatilityLift - levelPressure;
+  const zoneWidth = Utils.clamp(baseWidth, MIN_ZONE_WIDTH, MAX_ZONE_WIDTH);
 
-  const logisticBias = 1 / (1 + Math.exp(-3 * (0.5 - ema)));
-  const correction = (logisticBias - 0.5) * 0.35;
-  const skillPressure = Math.min(level * 0.018 + progress * 0.08, 0.24);
-  const checkpointPenalty = oneWinAway ? 0.14 : 0;
-  const volatilityPenalty = (state.volatility - 0.15) * 0.08;
-
-  const winChance = Utils.clamp(
-    0.5 + correction - skillPressure - checkpointPenalty - volatilityPenalty,
-    0.18,
-    0.78
+  const speed = Utils.clamp(
+    BASE_PULSE_SPEED + levelPressure * 0.55 + Math.abs(emaDrift) * 0.25,
+    0.28,
+    0.82
   );
 
   return {
-    winChance,
-    oneWinAway,
-    empiricalWinRate,
+    zoneWidth,
+    speed,
+    winRate,
   };
 };
 
@@ -111,27 +112,14 @@ const updateAdaptiveState = (state, playerWon) => {
   state.volatility = Utils.clamp(state.volatility * 0.9 + Math.abs(error) * 0.1, 0.12, 0.45);
 };
 
-const createGrid = (container, onCellClick) => {
-  container.innerHTML = "";
-  const cells = [];
-  for (let row = 0; row < GRID_SIZE; row += 1) {
-    for (let col = 0; col < GRID_SIZE; col += 1) {
-      const cell = document.createElement("button");
-      cell.className = "grid-cell";
-      cell.dataset.index = String(row * GRID_SIZE + col);
-      cell.setAttribute("role", "gridcell");
-      cell.addEventListener("click", () => onCellClick(cell));
-      container.appendChild(cell);
-      cells.push(cell);
-    }
-  }
-  return cells;
-};
-
 const updateTrack = (state) => {
   const { current, nextValue, progress } = getCheckpointInfo(state.points);
-  const trackFill = document.getElementById("trackFill");
-  const dotsContainer = document.getElementById("checkpointDots");
+  const trackFill = $("trackFill");
+  const dotsContainer = $("checkpointDots");
+
+  if (!trackFill || !dotsContainer) {
+    return;
+  }
 
   trackFill.style.width = `${Utils.clamp(progress, 0, 1) * 100}%`;
   dotsContainer.innerHTML = "";
@@ -153,19 +141,13 @@ const updateTrack = (state) => {
     dotsContainer.appendChild(dot);
   }
 
-  document.getElementById("checkpointValue").textContent = `${current}`;
-  document.getElementById("nextCheckpoint").textContent = `${Utils.formatNumber(nextValue)} pts`;
-  document.getElementById("difficultyValue").textContent = getDifficultyLabel(state.points);
-
-  const { winChance, oneWinAway } = calculateAdaptiveChance(state);
-  document.getElementById("fairnessValue").textContent = `Target ${Utils.percentage(winChance)}`;
-  document.getElementById("pressureValue").textContent = oneWinAway ? "Active" : "Inactive";
-  document.getElementById("winRateValue").textContent = Utils.percentage(getWinRate(state));
+  setText($("checkpointValue"), `${current}`);
+  setText($("nextCheckpoint"), `${Utils.formatNumber(nextValue)} pts`);
 };
 
 const updateScoreboard = (state) => {
-  document.getElementById("pointsValue").textContent = Utils.formatNumber(state.points);
-  document.getElementById("recordValue").textContent = `${state.wins}W - ${state.losses}L`;
+  setText($("pointsValue"), Utils.formatNumber(state.points));
+  setText($("winRateValue"), Utils.percentage(getWinRate(state)));
 };
 
 const updateResultBanner = (banner, outcome) => {
@@ -184,25 +166,30 @@ const updateResultBanner = (banner, outcome) => {
 const initApp = () => {
   let state = Storage.load();
 
-  const checkpointScreen = document.getElementById("checkpointScreen");
-  const gameScreen = document.getElementById("gameScreen");
-  const playBtn = document.getElementById("playBtn");
-  const backBtn = document.getElementById("backBtn");
-  const startMatchBtn = document.getElementById("startMatchBtn");
-  const resetRunBtn = document.getElementById("resetRunBtn");
-  const grid = document.getElementById("grid");
-  const resultBanner = document.getElementById("resultBanner");
-  const turnValue = document.getElementById("turnValue");
-  const matchStatus = document.getElementById("matchStatus");
-  const matchScore = document.getElementById("matchScore");
+  const checkpointScreen = $("checkpointScreen");
+  const gameScreen = $("gameScreen");
+  const playBtn = $("playBtn");
+  const backBtn = $("backBtn");
+  const startMatchBtn = $("startMatchBtn");
+  const stopBtn = $("stopBtn");
+  const resetRunBtn = $("resetRunBtn");
+  const targetZone = $("targetZone");
+  const marker = $("marker");
+  const resultBanner = $("resultBanner");
 
-  let cells = [];
-  let playerTurn = true;
+  if (!checkpointScreen || !gameScreen || !playBtn || !backBtn || !startMatchBtn || !stopBtn || !resetRunBtn || !targetZone || !marker || !resultBanner) {
+    return;
+  }
+
   let matchActive = false;
-  let playerWins = true;
-  let playerScore = 0;
-  let botScore = 0;
-  let totalMoves = 0;
+  let roundsPlayed = 0;
+  let roundsWon = 0;
+  let pulseSpeed = BASE_PULSE_SPEED;
+  let pulseWidth = 0.2;
+  let pulsePosition = 0.1;
+  let pulseDirection = 1;
+  let frameId = null;
+  let lastFrameTime = 0;
 
   const switchScreen = (target) => {
     if (target === "game") {
@@ -214,47 +201,39 @@ const initApp = () => {
     }
   };
 
-  const resetGrid = () => {
-    cells.forEach((cell) => {
-      cell.classList.remove("player", "bot");
-      cell.textContent = "";
-      cell.disabled = false;
-    });
-    playerScore = 0;
-    botScore = 0;
-    totalMoves = 0;
-    playerTurn = true;
-    matchActive = false;
-    turnValue.textContent = "Player";
-    matchStatus.textContent = "Ready";
-    matchScore.textContent = "0 - 0";
-    updateResultBanner(resultBanner, null);
-  };
-};
-
-  const lockGrid = () => {
-    cells.forEach((cell) => {
-      cell.disabled = true;
-    });
+  const resetPulse = () => {
+    pulsePosition = Math.random() * 0.6 + 0.2;
+    pulseDirection = Math.random() > 0.5 ? 1 : -1;
+    marker.style.left = `${pulsePosition * 100}%`;
   };
 
-  const updateMatchScore = () => {
-    matchScore.textContent = `${playerScore} - ${botScore}`;
+  const updateZone = () => {
+    const zoneStart = Utils.clamp(Math.random() * (1 - pulseWidth), 0.05, 0.75);
+    targetZone.style.left = `${zoneStart * 100}%`;
+    targetZone.style.width = `${pulseWidth * 100}%`;
+  };
+
+  const updateResult = (message, outcome) => {
+    updateResultBanner(resultBanner, outcome);
+    if (message) {
+      resultBanner.textContent = message;
+    }
+  };
+
+  const stopAnimation = () => {
+    if (frameId) {
+      cancelAnimationFrame(frameId);
+      frameId = null;
+    }
   };
 
   const resolveMatch = () => {
     matchActive = false;
-    lockGrid();
+    stopAnimation();
+    stopBtn.disabled = true;
+    startMatchBtn.disabled = false;
 
-    if (playerWins && playerScore <= botScore) {
-      playerScore = botScore + 1;
-      updateMatchScore();
-    }
-
-    if (!playerWins && botScore <= playerScore) {
-      botScore = playerScore + 1;
-      updateMatchScore();
-    }
+    const playerWins = roundsWon >= Math.ceil(ROUNDS_PER_MATCH / 2);
 
     if (playerWins) {
       state.points += POINTS_PER_WIN;
@@ -271,66 +250,73 @@ const initApp = () => {
 
     updateScoreboard(state);
     updateTrack(state);
-    updateResultBanner(resultBanner, playerWins ? "win" : "loss");
-    matchStatus.textContent = "Match complete";
-    turnValue.textContent = "-";
-    startMatchBtn.disabled = false;
+    updateResult(playerWins ? "Victory. +100 points locked in at your checkpoint." : "Defeat. -100 points, but checkpoints prevent further drops.", playerWins ? "win" : "loss");
   };
 
-  const botMove = () => {
-    if (!matchActive) return;
+  const evaluateRound = () => {
+    const zoneLeft = parseFloat(targetZone.style.left) / 100;
+    const zoneWidth = parseFloat(targetZone.style.width) / 100;
+    const zoneRight = zoneLeft + zoneWidth;
+    const hit = pulsePosition >= zoneLeft && pulsePosition <= zoneRight;
+    roundsPlayed += 1;
+    if (hit) {
+      roundsWon += 1;
+    }
 
-    const available = cells.filter((cell) => !cell.classList.contains("player") && !cell.classList.contains("bot"));
-    if (!available.length) {
+    const roundsRemaining = ROUNDS_PER_MATCH - roundsPlayed;
+    if (roundsRemaining <= 0) {
       resolveMatch();
       return;
     }
 
-    const choice = available[Math.floor(Math.random() * available.length)];
-    choice.classList.add("bot");
-    choice.textContent = "B";
-    botScore += 1;
-    totalMoves += 1;
-    updateMatchScore();
-
-    if (totalMoves >= MAX_MATCH_TURNS) {
-      resolveMatch();
-      return;
-    }
-
-    playerTurn = true;
-    turnValue.textContent = "Player";
+    updateResult(hit ? "Hit. Keep the rhythm." : "Missed. Refocus and try again.", hit ? "win" : "loss");
+    updateZone();
+    resetPulse();
   };
 
-  const handleCellClick = (cell) => {
-    if (!matchActive || !playerTurn) return;
-    if (cell.classList.contains("player") || cell.classList.contains("bot")) return;
-
-    cell.classList.add("player");
-    cell.textContent = "P";
-    playerScore += 1;
-    totalMoves += 1;
-    updateMatchScore();
-
-    if (totalMoves >= MAX_MATCH_TURNS) {
-      resolveMatch();
+  const tick = (timestamp) => {
+    if (!matchActive) {
+      stopAnimation();
       return;
     }
 
-    playerTurn = false;
-    turnValue.textContent = "Bot";
-    setTimeout(botMove, 450);
+    if (!lastFrameTime) {
+      lastFrameTime = timestamp;
+    }
+
+    const delta = (timestamp - lastFrameTime) / 1000;
+    lastFrameTime = timestamp;
+    pulsePosition += delta * pulseSpeed * pulseDirection;
+
+    if (pulsePosition >= 0.98) {
+      pulsePosition = 0.98;
+      pulseDirection = -1;
+    }
+    if (pulsePosition <= 0.02) {
+      pulsePosition = 0.02;
+      pulseDirection = 1;
+    }
+
+    marker.style.left = `${pulsePosition * 100}%`;
+    frameId = requestAnimationFrame(tick);
   };
 
   const startMatch = () => {
-    resetGrid();
+    const challenge = calculateAdaptiveChallenge(state);
+    pulseWidth = challenge.zoneWidth;
+    pulseSpeed = challenge.speed;
+    roundsPlayed = 0;
+    roundsWon = 0;
+    lastFrameTime = 0;
     matchActive = true;
     startMatchBtn.disabled = true;
-    matchStatus.textContent = "In progress";
-
-    const { winChance } = calculateAdaptiveChance(state);
-    playerWins = Math.random() < winChance;
+    stopBtn.disabled = false;
+    updateZone();
+    resetPulse();
     updateTrack(state);
+    updateResult("Round started. Stop the pulse inside the target zone.", null);
+    stopAnimation();
+    frameId = requestAnimationFrame(tick);
   };
 
   playBtn.addEventListener("click", () => {
@@ -344,18 +330,27 @@ const initApp = () => {
 
   startMatchBtn.addEventListener("click", startMatch);
 
+  stopBtn.addEventListener("click", () => {
+    if (!matchActive) return;
+    evaluateRound();
+  });
+
   resetRunBtn.addEventListener("click", () => {
     state = Storage.reset();
     Storage.save(state);
     updateScoreboard(state);
     updateTrack(state);
-    resetGrid();
+    matchActive = false;
+    stopAnimation();
+    startMatchBtn.disabled = false;
+    stopBtn.disabled = true;
+    updateResultBanner(resultBanner, null);
+    resetPulse();
   });
 
-  cells = createGrid(grid, handleCellClick);
   updateScoreboard(state);
   updateTrack(state);
-  resetGrid();
+  resetPulse();
 };
 
-document.addEventListener("DOMContentLoaded", initGame);
+document.addEventListener("DOMContentLoaded", initApp);
