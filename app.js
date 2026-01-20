@@ -25,14 +25,6 @@ const elements = {
   modeLabel: document.getElementById("modeLabel"),
 };
 
-function gameToScreen(x, y, maxCoord) {
-  return { row: maxCoord - y, col: x };
-}
-
-function screenToGame(row, col, maxCoord) {
-  return { x: col, y: maxCoord - row };
-}
-
 const params = new URLSearchParams(window.location.search);
 const mode = params.get("mode") === "practice" ? "practice" : "match";
 
@@ -118,7 +110,6 @@ function startRound() {
   updateLegalMoves();
   updateHud();
   positionToken(false);
-  runMappingChecks();
 
   if (gameState.phase === "bot_turn") {
     setTimeout(runBotTurn, 150);
@@ -127,14 +118,12 @@ function startRound() {
 
 function buildBoard() {
   const { N } = gameState;
-  const maxCoord = N;
   elements.board.innerHTML = "";
   elements.board.style.gridTemplateColumns = `repeat(${N + 1}, 1fr)`;
   elements.board.style.gridTemplateRows = `repeat(${N + 1}, 1fr)`;
 
-  for (let row = 0; row <= N; row += 1) {
-    for (let col = 0; col <= N; col += 1) {
-      const { x, y } = screenToGame(row, col, maxCoord);
+  for (let y = N; y >= 0; y -= 1) {
+    for (let x = 0; x <= N; x += 1) {
       const cell = document.createElement("button");
       cell.className = "cell";
       cell.dataset.x = x;
@@ -205,10 +194,10 @@ function positionToken(animate, isBot = false) {
   const rect = elements.board.getBoundingClientRect();
   const wrapRect = elements.boardWrap.getBoundingClientRect();
   const cellSize = rect.width / (gameState.N + 1);
-  const maxCoord = gameState.N;
-  const { row, col } = gameToScreen(gameState.pos.x, gameState.pos.y, maxCoord);
-  const left = rect.left + col * cellSize;
-  const top = rect.top + row * cellSize;
+  const x = gameState.pos.x;
+  const y = gameState.pos.y;
+  const left = rect.left + x * cellSize;
+  const top = rect.top + (gameState.N - y) * cellSize;
 
   const tokenSize = cellSize * 0.7;
   elements.token.style.width = `${tokenSize}px`;
@@ -260,13 +249,12 @@ function showMovePreview(toX, toY) {
   const rect = elements.board.getBoundingClientRect();
   const wrapRect = elements.boardWrap.getBoundingClientRect();
   const cellSize = rect.width / (gameState.N + 1);
-  const maxCoord = gameState.N;
-  const fromScreen = gameToScreen(gameState.pos.x, gameState.pos.y, maxCoord);
-  const toScreen = gameToScreen(toX, toY, maxCoord);
-  const fromCx = fromScreen.col * cellSize + cellSize / 2 + (rect.left - wrapRect.left);
-  const fromCy = fromScreen.row * cellSize + cellSize / 2 + (rect.top - wrapRect.top);
-  const toCx = toScreen.col * cellSize + cellSize / 2 + (rect.left - wrapRect.left);
-  const toCy = toScreen.row * cellSize + cellSize / 2 + (rect.top - wrapRect.top);
+  const fromX = gameState.pos.x;
+  const fromY = gameState.pos.y;
+  const fromCx = fromX * cellSize + cellSize / 2 + (rect.left - wrapRect.left);
+  const fromCy = (gameState.N - fromY) * cellSize + cellSize / 2 + (rect.top - wrapRect.top);
+  const toCx = toX * cellSize + cellSize / 2 + (rect.left - wrapRect.left);
+  const toCy = (gameState.N - toY) * cellSize + cellSize / 2 + (rect.top - wrapRect.top);
   const dx = toCx - fromCx;
   const dy = toCy - fromCy;
   const length = Math.hypot(dx, dy);
@@ -279,23 +267,6 @@ function showMovePreview(toX, toY) {
 
 function hideMovePreview() {
   elements.movePreview.classList.remove("active");
-}
-
-function runMappingChecks() {
-  const maxCoord = gameState.N;
-  if (maxCoord < 5) return;
-  const origin = gameToScreen(0, 0, maxCoord);
-  console.assert(origin.row === maxCoord && origin.col === 0, "Origin should be bottom-left.");
-  const horizontal = gameToScreen(5, 5, maxCoord);
-  const horizontalEnd = gameToScreen(0, 5, maxCoord);
-  console.assert(horizontal.row === horizontalEnd.row, "Same y should map to same row.");
-  const verticalEnd = gameToScreen(5, 0, maxCoord);
-  console.assert(horizontal.col === verticalEnd.col, "Same x should map to same column.");
-  const diagEnd = gameToScreen(2, 2, maxCoord);
-  console.assert(
-    horizontal.row - diagEnd.row === horizontal.col - diagEnd.col,
-    "Diagonal down-left should map diagonally."
-  );
 }
 
 function commitMove(actor, toX, toY) {
