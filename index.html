@@ -3,101 +3,150 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>BlastGrid</title>
+<title>Flowfront Tactics</title>
 <style>
   :root{
-    --bg:#0b0f1a; --panel:rgba(255,255,255,.06); --line:rgba(255,255,255,.14);
-    --text:rgba(255,255,255,.92); --muted:rgba(255,255,255,.62);
-    --accent:rgba(110,170,255,.95); --good:rgba(80,220,140,.92); --bad:rgba(240,80,90,.92);
+    --bg:#0b1020;
+    --panel:rgba(255,255,255,.06);
+    --line:rgba(255,255,255,.14);
+    --text:rgba(255,255,255,.92);
+    --muted:rgba(255,255,255,.62);
+    --accent:rgba(110,170,255,.95);
+    --accent2:rgba(175,110,255,.95);
+    --good:rgba(80,220,140,.92);
+    --bad:rgba(240,80,90,.92);
+    --warn:rgba(255,205,90,.92);
     --r:16px;
   }
   *{box-sizing:border-box}
   body{
     margin:0; min-height:100vh; color:var(--text);
-    font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
-    background: radial-gradient(1100px 700px at 10% 10%, rgba(110,170,255,.12), transparent),
-                radial-gradient(900px 700px at 90% 20%, rgba(175,110,255,.10), transparent),
-                var(--bg);
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    background:
+      radial-gradient(1100px 700px at 10% 10%, rgba(110,170,255,.14), transparent),
+      radial-gradient(900px 700px at 90% 20%, rgba(175,110,255,.12), transparent),
+      radial-gradient(900px 700px at 40% 90%, rgba(80,220,140,.08), transparent),
+      var(--bg);
   }
-  .app{max-width:1060px;margin:0 auto;padding:14px}
+  .app{max-width:1100px;margin:0 auto;padding:14px}
   .top{
     display:flex;gap:12px;align-items:center;justify-content:space-between;
-    padding:14px;border-radius:var(--r);background:var(--panel);border:1px solid var(--line);
+    padding:14px;border-radius:var(--r);
+    background:var(--panel);border:1px solid var(--line);
     flex-wrap:wrap;
   }
   .brand{display:flex;flex-direction:column;gap:4px}
-  .title{font-weight:900;letter-spacing:.2px}
+  .title{font-weight:950;letter-spacing:.2px}
   .sub{color:var(--muted);font-size:13px}
   .hud{display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end}
   .card{
     padding:10px 12px;border-radius:14px;background:rgba(255,255,255,.08);
-    border:1px solid var(--line);min-width:120px
+    border:1px solid var(--line);min-width:126px
   }
   .label{color:var(--muted);font-size:12px}
-  .value{font-weight:900;font-size:16px}
-  .row{margin-top:12px;display:grid;grid-template-columns:1.2fr .8fr;gap:12px}
-  @media (max-width:880px){.row{grid-template-columns:1fr}}
+  .value{font-weight:950;font-size:16px}
+  .row{margin-top:12px;display:grid;grid-template-columns:1.25fr .75fr;gap:12px}
+  @media (max-width:920px){.row{grid-template-columns:1fr}}
   .panel{
-    padding:14px;border-radius:var(--r);background:var(--panel);border:1px solid var(--line);
+    padding:14px;border-radius:var(--r);
+    background:var(--panel);border:1px solid var(--line);
+  }
+  .banner{
+    margin-top:10px;padding:12px 14px;border-radius:14px;border:1px solid var(--line);
+    background:rgba(255,255,255,.05);font-weight:900;line-height:1.35;
+  }
+  .banner.good{border-color:rgba(80,220,140,.35);background:rgba(80,220,140,.12)}
+  .banner.bad{border-color:rgba(240,80,90,.35);background:rgba(240,80,90,.12)}
+  .banner.warn{border-color:rgba(255,205,90,.35);background:rgba(255,205,90,.10)}
+  .mini{font-size:12px;color:var(--muted);line-height:1.35}
+  .hint{color:var(--muted);font-size:13px;line-height:1.45}
+  .kbd{
+    font-family:ui-monospace,Menlo,Consolas,monospace;
+    padding:2px 6px;border:1px solid var(--line);border-radius:8px;
+    background:rgba(255,255,255,.06);color:var(--text)
   }
   .btns{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
   button{
     appearance:none;border:1px solid var(--line);border-radius:14px;
-    padding:10px 14px;font-weight:900;cursor:pointer;color:var(--text);
+    padding:10px 14px;font-weight:950;cursor:pointer;color:var(--text);
     background:rgba(255,255,255,.06);
+    transition:transform .06s ease, filter .12s ease;
   }
-  button.primary{background:linear-gradient(90deg,rgba(110,170,255,.28),rgba(175,110,255,.22))}
-  button:disabled{opacity:.5;cursor:not-allowed}
-  .hint{color:var(--muted);font-size:13px;line-height:1.4}
-  .banner{
-    margin-top:10px;padding:12px 14px;border-radius:14px;border:1px solid var(--line);
-    background:rgba(255,255,255,.05);font-weight:900;
+  button:hover{filter:brightness(1.05)}
+  button:active{transform:translateY(1px)}
+  button.primary{
+    background:linear-gradient(90deg,rgba(110,170,255,.26),rgba(175,110,255,.22));
   }
-  .banner.good{border-color:rgba(80,220,140,.35);background:rgba(80,220,140,.12)}
-  .banner.bad{border-color:rgba(240,80,90,.35);background:rgba(240,80,90,.12)}
+  button.danger{
+    background:linear-gradient(90deg,rgba(240,80,90,.18),rgba(255,205,90,.16));
+  }
+  button:disabled{opacity:.55;cursor:not-allowed;transform:none}
+  .gridWrap{
+    display:flex;justify-content:center;align-items:center;
+  }
   canvas{
-    width:100%;height:auto;aspect-ratio:1/1;border-radius:var(--r);
-    border:1px solid var(--line);background:rgba(255,255,255,.03);
-    display:block;
+    width:100%;height:auto;aspect-ratio:1/1;
+    border-radius:var(--r);border:1px solid var(--line);
+    background:rgba(255,255,255,.03);display:block;
   }
-  .mini{font-size:12px;color:var(--muted)}
-  .kbd{font-family:ui-monospace,Menlo,Consolas,monospace;padding:2px 6px;border:1px solid var(--line);
-       border-radius:8px;background:rgba(255,255,255,.06);color:var(--text)}
   .track{
     margin-top:10px;position:relative;height:56px;border-radius:14px;
     background:rgba(255,255,255,.04);border:1px solid var(--line);overflow:hidden;
   }
   .track-line{position:absolute;left:14px;right:14px;top:28px;height:4px;border-radius:99px;background:rgba(255,255,255,.10)}
-  .track-fill{position:absolute;left:14px;top:28px;height:4px;border-radius:99px;
-    width:0%;transition:width 240ms ease;background:linear-gradient(90deg,var(--accent),rgba(175,110,255,.95))}
+  .track-fill{position:absolute;left:14px;top:28px;height:4px;border-radius:99px;width:0%;
+    transition:width 240ms ease;background:linear-gradient(90deg,var(--accent),var(--accent2))}
   .track-dots{position:absolute;left:14px;right:14px;top:18px;display:flex;justify-content:space-between;align-items:center;pointer-events:none}
   .dot{width:14px;height:14px;border-radius:999px;border:2px solid rgba(255,255,255,.32);background:rgba(10,12,20,.9);position:relative}
   .dot span{position:absolute;top:18px;left:50%;transform:translateX(-50%);font-size:11px;color:var(--muted);white-space:nowrap}
   .dot.reached{border-color:rgba(80,220,140,.65);box-shadow:0 0 0 3px rgba(80,220,140,.12)}
   .dot.current{border-color:rgba(255,205,90,.75);box-shadow:0 0 0 4px rgba(255,205,90,.14)}
   .dot.next{border-color:rgba(110,170,255,.85);box-shadow:0 0 0 5px rgba(110,170,255,.14);transform:scale(1.15)}
+  .meter{
+    height:10px;border-radius:999px;border:1px solid var(--line);
+    background:rgba(255,255,255,.04);overflow:hidden;margin-top:6px
+  }
+  .meter > div{height:100%;width:0%;background:linear-gradient(90deg,var(--good),var(--accent),var(--accent2));transition:width 240ms ease}
+  .ratingRow{
+    display:none;margin-top:12px;padding:12px;border-radius:14px;border:1px solid var(--line);
+    background:rgba(255,255,255,.05);
+  }
+  .ratingRow.show{display:block}
+  input[type="range"]{width:100%}
+  .split{display:flex;justify-content:space-between;gap:10px;align-items:center}
 </style>
 </head>
 <body>
 <div class="app">
   <div class="top">
     <div class="brand">
-      <div class="title">BlastGrid</div>
-      <div class="sub">Grid bombs • quick tactics • flow-balanced difficulty</div>
+      <div class="title">Flowfront Tactics</div>
+      <div class="sub">Turn-based grid duel • AI opponent • flow-balanced adaptation (healthy)</div>
     </div>
     <div class="hud">
-      <div class="card"><div class="label">Points</div><div id="points" class="value">0</div></div>
-      <div class="card"><div class="label">Checkpoint Level</div><div id="level" class="value">0</div></div>
-      <div class="card"><div class="label">Flow</div><div id="flow" class="value">—</div></div>
-      <div class="card"><div class="label">Difficulty</div><div id="diff" class="value">—</div></div>
-      <div class="card"><div class="label">Lives</div><div id="lives" class="value">3</div></div>
+      <div class="card"><div class="label">Points</div><div id="uiPoints" class="value">0</div></div>
+      <div class="card"><div class="label">Checkpoint Level</div><div id="uiLevel" class="value">0</div></div>
+      <div class="card">
+        <div class="label">Flow</div><div id="uiFlow" class="value">—</div>
+        <div class="meter"><div id="uiFlowBar"></div></div>
+      </div>
+      <div class="card">
+        <div class="label">Difficulty</div><div id="uiDiff" class="value">—</div>
+        <div class="meter"><div id="uiDiffBar"></div></div>
+      </div>
+      <div class="card"><div class="label">Streak</div><div id="uiStreak" class="value">0</div></div>
     </div>
   </div>
 
   <div class="row">
     <div class="panel">
-      <canvas id="cv" width="900" height="900" aria-label="BlastGrid canvas"></canvas>
-      <div id="banner" class="banner">Press <b>Start</b>. Move with <span class="kbd">WASD</span>/<span class="kbd">Arrows</span>, bomb with <span class="kbd">Space</span>.</div>
+      <div class="gridWrap">
+        <canvas id="cv" width="900" height="900" aria-label="Tactics canvas"></canvas>
+      </div>
+
+      <div id="banner" class="banner">
+        Click <b>New Match</b>. You get <b>2 Action Points</b> per turn. Select a unit → click a tile to move or an enemy to attack.
+      </div>
 
       <div class="track" aria-label="Checkpoint progress">
         <div class="track-line"></div>
@@ -105,28 +154,47 @@
         <div id="dots" class="track-dots"></div>
       </div>
       <div class="mini" style="margin-top:8px">
-        Every 1,000 points is a checkpoint. Losses can’t drop you below your checkpoint floor.
+        Every <b>1,000 points</b> is a checkpoint. Losses cannot drop you below your current checkpoint floor.
       </div>
     </div>
 
     <div class="panel">
       <div class="hint">
-        <b>Goal:</b> clear all enemies.<br><br>
-        <b>Powerups:</b><br>
-        • +Bomb (carry more)<br>
-        • +Range (bigger blast)<br>
-        • +Life<br><br>
-        <b>Tips:</b> Use crates as shields, bait enemies into lanes, and plan escape routes.
+        <b>Goal:</b> First to <b>8 Victory</b> wins, or eliminate the other side.<br><br>
+        <b>Victory</b> is earned at the end of your turn by holding objectives.<br><br>
+        <b>Units:</b><br>
+        • <b>Scout</b>: fast mover<br>
+        • <b>Tank</b>: more HP<br>
+        • <b>Sniper</b>: long range (line-of-sight)<br><br>
+        <b>Flow engine:</b> learns your skill, volatility, and fatigue to keep challenge in the “sweet spot.”
       </div>
 
       <div class="btns">
-        <button id="start" class="primary">Start</button>
-        <button id="pause">Pause</button>
-        <button id="reset">Reset Progress</button>
+        <button id="btnNew" class="primary">New Match</button>
+        <button id="btnEnd" disabled>End Turn</button>
+        <button id="btnPause">Pause</button>
+        <button id="btnReset" class="danger">Reset Progress</button>
       </div>
 
       <div class="mini" style="margin-top:10px">
-        This adapts to keep challenge ≈ skill (flow), not to “trap” you.
+        Healthy engagement guardrails: difficulty shifts are capped; if fatigue rises, it recommends a break.
+      </div>
+
+      <div id="ratingRow" class="ratingRow">
+        <div class="split">
+          <div style="font-weight:950">Quick check:</div>
+          <div class="mini">Optional. Helps the director learn.</div>
+        </div>
+        <div class="mini" style="margin-top:6px">How fun did that match feel? (1 = meh, 5 = awesome)</div>
+        <input id="rating" type="range" min="1" max="5" step="1" value="4" />
+        <div class="split">
+          <div class="mini">1</div>
+          <div class="mini">2</div>
+          <div class="mini">3</div>
+          <div class="mini">4</div>
+          <div class="mini">5</div>
+        </div>
+        <button id="btnSubmitRating" style="margin-top:8px">Submit rating</button>
       </div>
     </div>
   </div>
@@ -136,39 +204,169 @@
 (() => {
   "use strict";
 
-  // ----------------------------
-  // Checkpoints / Progress
-  // ----------------------------
-  const STORAGE_KEY = "blastgrid_progress_v1";
+  // =========================================================
+  // Utilities (math + rng + tiny linear algebra)
+  // =========================================================
+  const clamp = (v, a, b) => Math.min(Math.max(v, a), b);
+  const lerp = (a, b, t) => a + (b - a) * t;
+
+  // Deterministic-ish RNG (seeded) to make behavior stable match-to-match.
+  function mulberry32(seed) {
+    let a = seed >>> 0;
+    return function() {
+      a |= 0; a = (a + 0x6D2B79F5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  const seedBase = (Date.now() ^ (performance.now() * 1000 | 0)) >>> 0;
+  let rng = mulberry32(seedBase);
+
+  const rand = () => rng();
+  const randInt = (n) => (rand() * n) | 0;
+
+  // Gaussian via Box-Muller
+  const randn = () => {
+    let u = 0, v = 0;
+    while (u === 0) u = rand();
+    while (v === 0) v = rand();
+    return Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
+  };
+
+  // Linear algebra (small d<=8)
+  const dot = (a, b) => a.reduce((s, v, i) => s + v * b[i], 0);
+
+  const outerAdd = (A, x, scale = 1) => {
+    const d = x.length;
+    for (let i = 0; i < d; i++) {
+      for (let j = 0; j < d; j++) {
+        A[i][j] += scale * x[i] * x[j];
+      }
+    }
+  };
+
+  const vecAddScaled = (b, x, scale) => {
+    for (let i = 0; i < b.length; i++) b[i] += scale * x[i];
+  };
+
+  const eye = (d, v = 1) => Array.from({ length: d }, (_, i) =>
+    Array.from({ length: d }, (_, j) => (i === j ? v : 0))
+  );
+
+  // Gauss-Jordan inverse (OK for small d)
+  const invert = (M) => {
+    const d = M.length;
+    const A = M.map(row => row.slice());
+    const I = eye(d, 1);
+
+    for (let col = 0; col < d; col++) {
+      // pivot
+      let pivot = col;
+      for (let r = col + 1; r < d; r++) {
+        if (Math.abs(A[r][col]) > Math.abs(A[pivot][col])) pivot = r;
+      }
+      if (Math.abs(A[pivot][col]) < 1e-12) return null;
+
+      // swap
+      if (pivot !== col) {
+        [A[pivot], A[col]] = [A[col], A[pivot]];
+        [I[pivot], I[col]] = [I[col], I[pivot]];
+      }
+
+      // normalize
+      const div = A[col][col];
+      for (let c = 0; c < d; c++) { A[col][c] /= div; I[col][c] /= div; }
+
+      // eliminate
+      for (let r = 0; r < d; r++) {
+        if (r === col) continue;
+        const factor = A[r][col];
+        for (let c = 0; c < d; c++) {
+          A[r][c] -= factor * A[col][c];
+          I[r][c] -= factor * I[col][c];
+        }
+      }
+    }
+    return I;
+  };
+
+  const matVec = (A, x) => A.map(row => dot(row, x));
+
+  // Cholesky decomposition for SPD matrix (returns lower L such that A = L L^T)
+  const cholesky = (A) => {
+    const n = A.length;
+    const L = Array.from({ length: n }, () => Array(n).fill(0));
+    for (let i = 0; i < n; i++) {
+      for (let j = 0; j <= i; j++) {
+        let sum = A[i][j];
+        for (let k = 0; k < j; k++) sum -= L[i][k] * L[j][k];
+        if (i === j) {
+          if (sum <= 1e-12) return null;
+          L[i][j] = Math.sqrt(sum);
+        } else {
+          L[i][j] = sum / L[j][j];
+        }
+      }
+    }
+    return L;
+  };
+
+  const sampleMVN = (mean, cov, scale = 1) => {
+    const n = mean.length;
+    const L = cholesky(cov);
+    if (!L) return mean.slice();
+
+    const z = Array.from({ length: n }, () => randn());
+    const y = Array(n).fill(0);
+    for (let i = 0; i < n; i++) {
+      let s = 0;
+      for (let k = 0; k <= i; k++) s += L[i][k] * z[k];
+      y[i] = s * scale;
+    }
+    return mean.map((m, i) => m + y[i]);
+  };
+
+  // =========================================================
+  // Persistence
+  // =========================================================
+  const STORAGE_KEY = "flowfront_tactics_state_v3";
   const CHECKPOINT = 1000;
   const WIN_POINTS = 250;
   const LOSS_POINTS = -150;
 
-  const defaultProgress = () => ({
+  const defaults = () => ({
     points: 0,
-    lives: 3,
-    games: 0,
     wins: 0,
     losses: 0,
-    winRateEma: 0.55,
-    skill: 0.50,
-    fatigue: 0.00,
-    volatility: 0.20,
-    difficultyBias: 0.00,
-    lastFlow: 0.70
+    games: 0,
+    streak: 0,               // positive for win streak, negative for loss streak
+    lastPlayedAt: 0,
+
+    // Player model (Bayesian-ish)
+    skillMu: 0.55,           // [0..1]
+    skillSigma: 0.25,        // uncertainty
+    volatility: 0.20,        // how “swingy” performance is
+    fatigue: 0.0,            // [0..1] rises with long sessions / stress
+    engagement: 0.70,        // smoothed "flow/engagement" estimate
+
+    // Director memory
+    difficultyBias: 0.0,     // learned offset to hit target win rate/flow
+    targetWin: 0.58,         // healthy target (slightly above 0.5 feels good)
+    bandit: null,            // stored bandit params
   });
 
-  const loadProgress = () => {
+  const load = () => {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return defaultProgress();
-    try { return { ...defaultProgress(), ...JSON.parse(raw) }; }
-    catch { return defaultProgress(); }
+    if (!raw) return defaults();
+    try { return { ...defaults(), ...JSON.parse(raw) }; }
+    catch { return defaults(); }
   };
-  const saveProgress = (p) => localStorage.setItem(STORAGE_KEY, JSON.stringify(p));
-  const resetProgress = () => { localStorage.removeItem(STORAGE_KEY); return defaultProgress(); };
+  const save = (s) => localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
+  const reset = () => { localStorage.removeItem(STORAGE_KEY); return defaults(); };
 
   const checkpointInfo = (points) => {
-    const p = Math.max(0, points|0);
+    const p = Math.max(0, points | 0);
     const level = Math.floor(p / CHECKPOINT);
     const base = level * CHECKPOINT;
     const next = (level + 1) * CHECKPOINT;
@@ -176,716 +374,1233 @@
     return { level, base, next, prog };
   };
 
-  // ----------------------------
-  // Flow Director (healthy)
-  // ----------------------------
-  function clamp(v,a,b){ return Math.min(Math.max(v,a),b); }
-  function lerp(a,b,t){ return a + (b-a)*t; }
+  // =========================================================
+  // Flow + Difficulty Director
+  //  - PlayerModel: skill (mu,sigma), volatility, fatigue
+  //  - Contextual bandit (LinTS) chooses parameter "bundles" (arms)
+  //  - Reward tries to maximize "flow": close matches + agency + reasonable pace
+  // =========================================================
+
+  class LinTSBandit {
+    // Linear Thompson Sampling per arm:
+    // Each arm has A (dxd) and b (d). theta ~ N(A^-1 b, v^2 A^-1)
+    constructor(arms, d, lambda = 1.0, v = 0.25) {
+      this.arms = arms;
+      this.d = d;
+      this.lambda = lambda;
+      this.v = v;
+      this.A = arms.map(() => eye(d, lambda));
+      this.b = arms.map(() => Array(d).fill(0));
+      this.n = arms.map(() => 0);
+    }
+
+    choose(x) {
+      let best = -Infinity, bestIdx = 0;
+      for (let i = 0; i < this.arms.length; i++) {
+        const invA = invert(this.A[i]);
+        if (!invA) continue;
+
+        const mean = matVec(invA, this.b[i]);          // A^-1 b
+        const cov = invA;                              // A^-1
+        const theta = sampleMVN(mean, cov, this.v);    // sample
+        const score = dot(theta, x);
+        if (score > best) { best = score; bestIdx = i; }
+      }
+      return bestIdx;
+    }
+
+    update(i, x, reward01) {
+      // ridge regression update
+      outerAdd(this.A[i], x, 1);
+      vecAddScaled(this.b[i], x, reward01);
+      this.n[i] += 1;
+    }
+
+    toJSON() {
+      return { arms: this.arms, d: this.d, lambda: this.lambda, v: this.v, A: this.A, b: this.b, n: this.n };
+    }
+
+    static fromJSON(obj) {
+      const bt = new LinTSBandit(obj.arms, obj.d, obj.lambda, obj.v);
+      bt.A = obj.A; bt.b = obj.b; bt.n = obj.n;
+      return bt;
+    }
+  }
+
+  class PlayerModel {
+    constructor(state) {
+      this.s = state;
+    }
+
+    observeMatch(obs) {
+      // obs: {won, durationMs, decisionMsAvg, margin01, agency01, frustration01, rating01}
+      // performance signal in [0..1]
+      const paceTarget = 70000; // ~70s match target
+      const paceScore = clamp(1 - Math.abs(obs.durationMs - paceTarget) / paceTarget, 0, 1);
+      const decisiveness = clamp(1 - obs.decisionMsAvg / 2600, 0, 1); // slower => lower
+      const perf = clamp(
+        0.30 * (obs.won ? 1 : 0) +
+        0.20 * paceScore +
+        0.20 * obs.margin01 +
+        0.15 * decisiveness +
+        0.15 * obs.agency01
+      , 0, 1);
+
+      // "Stress" / frustration influences volatility & fatigue
+      const stress = clamp(0.55 * obs.frustration01 + 0.25 * (1 - obs.margin01) + 0.20 * (obs.decisionMsAvg / 2600), 0, 1);
+
+      // Kalman-like skill update (mu,sigma)
+      const mu = this.s.skillMu;
+      const sig = this.s.skillSigma;
+
+      // measurement noise: higher when volatile/stressed
+      const R = clamp(0.08 + this.s.volatility * 0.22 + stress * 0.18, 0.08, 0.55);
+      const K = (sig * sig) / (sig * sig + R);
+
+      // Update mu toward perf
+      const newMu = clamp(mu + K * (perf - mu), 0.05, 0.98);
+
+      // Shrink sigma when consistent; expand slightly if performance swings
+      const innovation = Math.abs(perf - mu);
+      const sigmaShrink = Math.sqrt(Math.max(1e-6, (1 - K))) * sig;
+      const sigmaGrow = clamp(sig + (innovation - 0.12) * 0.08, 0.10, 0.45);
+      const newSigma = clamp(lerp(sigmaShrink, sigmaGrow, clamp(this.s.volatility, 0, 1)), 0.10, 0.45);
+
+      this.s.skillMu = newMu;
+      this.s.skillSigma = newSigma;
+
+      // Update volatility (EMA of innovation)
+      this.s.volatility = clamp(0.90 * this.s.volatility + 0.10 * clamp(innovation * 1.8, 0, 1), 0.05, 0.55);
+
+      // Fatigue: rises with duration + stress, decays with wins/short breaks
+      const sessionGap = this.s.lastPlayedAt ? (Date.now() - this.s.lastPlayedAt) : 9999999;
+      const decay = clamp(sessionGap / (8 * 60 * 1000), 0, 1); // ~8 min to decay toward 0
+      this.s.fatigue = clamp(this.s.fatigue * (1 - 0.45 * decay), 0, 1);
+
+      const long = clamp((obs.durationMs - paceTarget) / paceTarget, 0, 1);
+      const fatigueUp = clamp(0.10 * long + 0.18 * stress, 0, 0.35);
+      const fatigueDown = obs.won ? 0.08 : 0.03;
+      this.s.fatigue = clamp(this.s.fatigue + fatigueUp - fatigueDown, 0, 1);
+
+      // Engagement estimate: mix flow proxies + (optional) rating
+      const rating = (typeof obs.rating01 === "number") ? obs.rating01 : 0.75;
+      const flow = clamp(
+        0.40 * obs.margin01 +                 // close-ish games feel engaging
+        0.25 * paceScore +                    // good pacing
+        0.20 * obs.agency01 +                 // feeling of control
+        0.15 * rating -                       // user signal
+        0.25 * obs.frustration01              // too frustrating reduces it
+      , 0, 1);
+
+      this.s.engagement = clamp(0.85 * this.s.engagement + 0.15 * flow, 0, 1);
+
+      this.s.lastPlayedAt = Date.now();
+    }
+  }
 
   class FlowDirector {
-    constructor(progress){
-      this.p = progress;
-      this.targetWin = 0.60;
-      this.targetRoundMs = 55000; // "ideal" round length
+    constructor(state) {
+      this.s = state;
+
+      // Arms = parameter bundles (bot strength + map complexity + assist)
+      // These are intentionally discrete so the bandit has stable choices.
+      this.arms = [
+        { name: "calm",    botDepth: 1, botRand: 0.55, obstacles: 0.12, objPressure: 0.85, assist: 0.55 },
+        { name: "smooth",  botDepth: 1, botRand: 0.42, obstacles: 0.16, objPressure: 0.95, assist: 0.45 },
+        { name: "focus",   botDepth: 2, botRand: 0.32, obstacles: 0.18, objPressure: 1.05, assist: 0.35 },
+        { name: "spicy",   botDepth: 2, botRand: 0.22, obstacles: 0.22, objPressure: 1.15, assist: 0.25 },
+        { name: "sharp",   botDepth: 3, botRand: 0.16, obstacles: 0.24, objPressure: 1.25, assist: 0.18 },
+        { name: "killer",  botDepth: 3, botRand: 0.10, obstacles: 0.28, objPressure: 1.35, assist: 0.12 },
+      ];
+
+      this.d = 6; // feature dimension
+      if (!this.s.bandit) {
+        // higher v => more exploration
+        this.bandit = new LinTSBandit(this.arms, this.d, 1.0, 0.28);
+        this.s.bandit = this.bandit.toJSON();
+      } else {
+        this.bandit = LinTSBandit.fromJSON(this.s.bandit);
+      }
+
+      this.lastArmIdx = 1;
     }
 
-    // Convert skill + outcomes into a difficulty between 0.15..0.95
-    recommend(){
-      const winRate = (this.p.games ? this.p.wins / this.p.games : this.targetWin);
-      const wrGap = clamp(winRate - this.targetWin, -0.5, 0.5);
-
-      let d = 0.45;
-      d = lerp(d, this.p.skill, 0.80);
-      d += wrGap * 0.55;
-      d -= this.p.fatigue * 0.35;
-      d += this.p.difficultyBias;
-
-      d = clamp(d, 0.15, 0.95);
-
-      // Assist: more when fatigue high or loss streak
-      const losing = this.p.losses >= 2 && this.p.wins === 0;
-      let assist = 0.35 + this.p.fatigue * 0.45 + (losing ? 0.10 : 0);
-      assist = clamp(assist, 0.10, 0.95);
-
-      const flow = clamp(1 - Math.abs(d - this.p.skill) * 1.4 - this.p.fatigue * 0.35, 0, 1);
-
-      return { difficulty: d, assist, flow };
+    features() {
+      // Context features: [1, skillMu, skillSigma, fatigue, engagement, volatility]
+      return [
+        1,
+        this.s.skillMu,
+        this.s.skillSigma,
+        this.s.fatigue,
+        this.s.engagement,
+        this.s.volatility,
+      ];
     }
 
-    // Called at end of a round
-    observeRound({ won, roundMs, deaths, nearMisses, bombsPlaced, bombsHit }){
-      // winrate EMA (smooth)
-      const alpha = 0.10;
-      const reward = won ? 1 : 0;
-      this.p.winRateEma = this.p.winRateEma + alpha * (reward - this.p.winRateEma);
+    recommend() {
+      const x = this.features();
+      let idx = this.bandit.choose(x);
 
-      // performance score -> skill update
-      const timeScore = clamp(1 - (roundMs / this.targetRoundMs - 1) * 0.6, 0, 1); // faster than target => higher
-      const deathPenalty = clamp(deaths * 0.35, 0, 1);
-      const missPenalty = clamp(nearMisses * 0.08, 0, 0.6);
+      // Guardrails:
+      // - If fatigue is high, cap how hard it can get
+      if (this.s.fatigue > 0.70) idx = Math.min(idx, 2);
 
-      const efficiency = bombsPlaced > 0 ? clamp(bombsHit / bombsPlaced, 0, 1) : 0.2;
-      const effScore = 0.35 + 0.65 * efficiency;
+      // - If on a loss streak, gently ease for recovery (keeps it healthy)
+      if (this.s.streak <= -2) idx = Math.min(idx, 2);
 
-      let perf = 0.45 * timeScore + 0.35 * effScore + 0.20 * reward;
-      perf -= deathPenalty * 0.55;
-      perf -= missPenalty * 0.25;
-      perf = clamp(perf, 0, 1);
+      // - If on a win streak and engagement is high, allow harder but not jumpy
+      if (this.s.streak >= 3 && this.s.engagement > 0.70) idx = Math.max(idx, 2);
 
-      // skill moves slowly
-      this.p.skill = clamp(this.p.skill + (perf - this.p.skill) * 0.12, 0.05, 0.95);
+      // - Smooth sudden changes (reduce whiplash)
+      const prev = this.lastArmIdx;
+      if (Math.abs(idx - prev) >= 3) idx = prev + Math.sign(idx - prev) * 2;
 
-      // fatigue rises with long rounds + many near misses + deaths, decays with wins
-      const long = clamp((roundMs - this.targetRoundMs) / this.targetRoundMs, 0, 1);
-      const fatigueUp = clamp(0.10 * long + 0.05 * nearMisses + 0.18 * deaths, 0, 0.55);
-      const fatigueDown = won ? 0.10 : 0.03;
-      this.p.fatigue = clamp(this.p.fatigue + fatigueUp - fatigueDown, 0, 1);
+      const arm = this.arms[idx];
 
-      // difficultyBias nudges toward target winrate
-      const winRate = (this.p.games ? this.p.wins / this.p.games : this.targetWin);
-      const wrGap = clamp(winRate - this.targetWin, -0.5, 0.5);
-      this.p.difficultyBias = clamp(this.p.difficultyBias + wrGap * 0.03, -0.18, 0.18);
+      // Convert to continuous difficulty scalar for UI:
+      const diff = clamp(
+        0.18 + idx * 0.14 +
+        this.s.difficultyBias +
+        (this.s.skillMu - 0.55) * 0.20 -
+        this.s.fatigue * 0.25
+      , 0.10, 0.95);
 
-      // compute flow
-      const rec = this.recommend();
-      this.p.lastFlow = rec.flow;
+      this.lastArmIdx = idx;
+
+      return {
+        idx,
+        arm,
+        difficulty: diff,
+        flow: this.flowEstimate(diff),
+        assist: clamp(arm.assist + this.s.fatigue * 0.25 + (this.s.streak <= -2 ? 0.10 : 0), 0.05, 0.90),
+      };
+    }
+
+    flowEstimate(challenge) {
+      // Classic "challenge vs skill" curve (Gaussian-like)
+      const skill = this.s.skillMu;
+      const width = clamp(0.16 + this.s.skillSigma * 0.35, 0.14, 0.28);
+      const z = (challenge - skill) / width;
+      const match = Math.exp(-0.5 * z * z);
+      const fatiguePenalty = 1 - 0.55 * this.s.fatigue;
+      const volatilityPenalty = 1 - 0.25 * this.s.volatility;
+      return clamp(match * fatiguePenalty * volatilityPenalty, 0, 1);
+    }
+
+    updateAfterMatch(reward01) {
+      const x = this.features();
+      this.bandit.update(this.lastArmIdx, x, reward01);
+      this.s.bandit = this.bandit.toJSON();
+
+      // Slight bias learning to keep target win rate ~0.58 (healthy)
+      const winRate = this.s.games ? (this.s.wins / this.s.games) : this.s.targetWin;
+      const gap = clamp(winRate - this.s.targetWin, -0.5, 0.5);
+      this.s.difficultyBias = clamp(this.s.difficultyBias + gap * 0.025, -0.18, 0.18);
     }
   }
 
-  // ----------------------------
-  // Game: BlastGrid
-  // ----------------------------
+  // =========================================================
+  // Game: Flowfront Tactics (7x7)
+  //  - 3 units per side
+  //  - 3 objectives
+  //  - 2 Action Points per turn
+  //  - Bot uses lookahead depth based on director arm
+  // =========================================================
   const cv = document.getElementById("cv");
   const ctx = cv.getContext("2d");
+
   const ui = {
-    points: document.getElementById("points"),
-    level: document.getElementById("level"),
-    flow: document.getElementById("flow"),
-    diff: document.getElementById("diff"),
-    lives: document.getElementById("lives"),
+    points: document.getElementById("uiPoints"),
+    level: document.getElementById("uiLevel"),
+    flow: document.getElementById("uiFlow"),
+    diff: document.getElementById("uiDiff"),
+    flowBar: document.getElementById("uiFlowBar"),
+    diffBar: document.getElementById("uiDiffBar"),
+    streak: document.getElementById("uiStreak"),
     banner: document.getElementById("banner"),
-    start: document.getElementById("start"),
-    pause: document.getElementById("pause"),
-    reset: document.getElementById("reset"),
     trackFill: document.getElementById("trackFill"),
     dots: document.getElementById("dots"),
+
+    btnNew: document.getElementById("btnNew"),
+    btnEnd: document.getElementById("btnEnd"),
+    btnPause: document.getElementById("btnPause"),
+    btnReset: document.getElementById("btnReset"),
+
+    ratingRow: document.getElementById("ratingRow"),
+    rating: document.getElementById("rating"),
+    btnSubmitRating: document.getElementById("btnSubmitRating"),
   };
 
-  let P = loadProgress();
-  const director = new FlowDirector(P);
+  let S = load();
+  const playerModel = new PlayerModel(S);
+  const director = new FlowDirector(S);
 
-  // Grid size: classic-ish, but compact
-  const N = 11;
-  const TILE = () => Math.floor(Math.min(cv.width, cv.height) / N);
+  // Board constants
+  const N = 7;
+  const TILE = () => Math.floor(Math.min(cv.clientWidth || 900, cv.clientHeight || 900, 900) / N);
 
-  // Tiles: 0 empty, 1 solid, 2 crate
-  let grid = [];
-  let powerups = []; // {x,y,type}
-  let bombs = [];    // {x,y,t, fuseMs, range}
-  let blasts = [];   // {cells:[{x,y}], t, ms}
-  let enemies = [];  // {x,y,cd,kind}
-  let player = null; // {x,y,range,bombsMax,bombsPlaced,lives}
+  const COLORS = {
+    grid: "rgba(255,255,255,0.06)",
+    wall: "rgba(255,255,255,0.14)",
+    obj: "rgba(175,110,255,0.70)",
+    obj2:"rgba(110,170,255,0.70)",
+    player: "rgba(80,220,140,0.88)",
+    bot: "rgba(240,80,90,0.86)",
+    hi: "rgba(110,170,255,0.20)",
+    atk: "rgba(240,80,90,0.18)",
+    text: "rgba(255,255,255,0.92)",
+    muted: "rgba(255,255,255,0.65)",
+    warn: "rgba(255,205,90,0.22)",
+  };
 
-  let state = "menu"; // menu | playing | paused | roundover
-  let last = performance.now();
-  let keyState = new Set();
-  let moveCooldown = 0;
+  // Game state
+  let game = null;
+  let paused = false;
 
-  // round stats
-  let roundStartMs = 0;
-  let deathsThisRound = 0;
-  let nearMisses = 0;
-  let bombsPlaced = 0;
-  let bombsHit = 0;
+  // For UX metrics
+  let lastInputAt = 0;
+  let decisionTimes = []; // ms between actions
+  let misclicks = 0;
 
-  function setBanner(msg, mood=""){
-    ui.banner.classList.remove("good","bad");
+  const setBanner = (html, mood = "") => {
+    ui.banner.classList.remove("good", "bad", "warn");
     if (mood) ui.banner.classList.add(mood);
-    ui.banner.innerHTML = msg;
-  }
+    ui.banner.innerHTML = html;
+  };
 
-  function updateHud(){
-    ui.points.textContent = String(P.points|0);
-    const { level, prog } = checkpointInfo(P.points);
+  const updateTrack = () => {
+    const { level, prog } = checkpointInfo(S.points);
     ui.level.textContent = String(level);
-    ui.lives.textContent = String(P.lives);
+    ui.trackFill.style.width = `${clamp(prog, 0, 1) * 100}%`;
 
-    const rec = director.recommend();
-    ui.flow.textContent = `${Math.round(rec.flow*100)}%`;
-    ui.diff.textContent = `${Math.round(rec.difficulty*100)}%`;
-
-    ui.trackFill.style.width = `${clamp(prog,0,1)*100}%`;
-    renderDots(level);
-  }
-
-  function renderDots(currentLevel){
     ui.dots.innerHTML = "";
     const dotsToShow = 7;
-    const start = Math.max(currentLevel - 3, 0);
-    for (let i=0;i<dotsToShow;i++){
+    const start = Math.max(level - 3, 0);
+    for (let i = 0; i < dotsToShow; i++) {
       const lvl = start + i;
       const d = document.createElement("div");
       d.className = "dot";
-      if (lvl < currentLevel) d.classList.add("reached");
-      if (lvl === currentLevel) d.classList.add("current");
-      if (lvl === currentLevel + 1) d.classList.add("next");
+      if (lvl < level) d.classList.add("reached");
+      if (lvl === level) d.classList.add("current");
+      if (lvl === level + 1) d.classList.add("next");
       const s = document.createElement("span");
       s.textContent = `L${lvl}`;
       d.appendChild(s);
       ui.dots.appendChild(d);
     }
-  }
+  };
 
-  function rand(){
-    return Math.random();
-  }
+  const updateHud = () => {
+    ui.points.textContent = String(S.points | 0);
+    ui.streak.textContent = String(S.streak | 0);
 
-  function inBounds(x,y){ return x>=0 && x<N && y>=0 && y<N; }
+    const rec = director.recommend();
+    ui.flow.textContent = `${Math.round(rec.flow * 100)}%`;
+    ui.diff.textContent = `${Math.round(rec.difficulty * 100)}%`;
+    ui.flowBar.style.width = `${Math.round(rec.flow * 100)}%`;
+    ui.diffBar.style.width = `${Math.round(rec.difficulty * 100)}%`;
 
-  function tileAt(x,y){
-    if (!inBounds(x,y)) return 1;
-    return grid[y][x];
-  }
+    updateTrack();
+  };
 
-  function isBlocked(x,y){
-    const t = tileAt(x,y);
-    if (t === 1 || t === 2) return true;
-    if (enemies.some(e=>e.x===x && e.y===y)) return true;
+  // ---------------------------------------------------------
+  // Game mechanics
+  // ---------------------------------------------------------
+  const inBounds = (x, y) => x >= 0 && y >= 0 && x < N && y < N;
+
+  const key = (x, y) => `${x},${y}`;
+
+  const manhattan = (a, b) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
+
+  const cloneGame = (g) => JSON.parse(JSON.stringify(g));
+
+  const tileBlocked = (g, x, y) => {
+    if (!inBounds(x, y)) return true;
+    if (g.walls.has(key(x, y))) return true;
+    if (g.units.some(u => u.alive && u.x === x && u.y === y)) return true;
     return false;
-  }
+  };
 
-  function isDangerCell(x,y){
-    // active blasts
-    if (blasts.some(b=>b.cells.some(c=>c.x===x && c.y===y))) return true;
+  const losClear = (g, ax, ay, bx, by) => {
+    // line-of-sight on rook lines only
+    if (ax !== bx && ay !== by) return false;
+    const dx = Math.sign(bx - ax);
+    const dy = Math.sign(by - ay);
+    let x = ax + dx, y = ay + dy;
+    while (x !== bx || y !== by) {
+      if (g.walls.has(key(x, y))) return false;
+      if (g.units.some(u => u.alive && u.x === x && u.y === y)) return false;
+      x += dx; y += dy;
+    }
+    return true;
+  };
 
-    // bombs about to explode soon (predictive danger)
-    for (const b of bombs){
-      if (b.t <= 450){
-        const cells = bombBlastCells(b.x,b.y,b.range);
-        if (cells.some(c=>c.x===x && c.y===y)) return true;
+  const unitDefs = {
+    scout:  { hp: 2, move: 3, range: 2, dmg: 1, tag: "Scout"  },
+    tank:   { hp: 4, move: 2, range: 1, dmg: 1, tag: "Tank"   },
+    sniper: { hp: 2, move: 2, range: 4, dmg: 1, tag: "Sniper" },
+  };
+
+  const makeUnit = (id, side, type, x, y) => ({
+    id, side, type,
+    x, y,
+    hp: unitDefs[type].hp,
+    hpMax: unitDefs[type].hp,
+    alive: true,
+    actedThisTurn: 0,
+  });
+
+  const objectivePositions = () => ([
+    { x: 3, y: 1 }, { x: 1, y: 5 }, { x: 5, y: 5 },
+  ]);
+
+  const generateWalls = (density01, assist01) => {
+    // Balanced wall gen: keep center-ish lanes open more often.
+    // Assist reduces density a bit.
+    const d = clamp(density01 - assist01 * 0.08, 0.08, 0.30);
+    const walls = new Set();
+
+    // Fixed pillars for readability
+    const fixed = [
+      {x:2,y:2},{x:4,y:2},{x:2,y:4},{x:4,y:4}
+    ];
+    fixed.forEach(p => walls.add(key(p.x,p.y)));
+
+    // Random additional walls, but avoid objective tiles and spawns
+    const objectives = objectivePositions().map(p => key(p.x,p.y));
+    const avoid = new Set([...objectives, key(0,0), key(0,1), key(1,0), key(6,6), key(6,5), key(5,6)]);
+
+    for (let y = 0; y < N; y++) {
+      for (let x = 0; x < N; x++) {
+        if (avoid.has(key(x,y))) continue;
+        // prefer edges for extra walls
+        const edge = (x===0||y===0||x===N-1||y===N-1) ? 0.18 : 0;
+        const centerPenalty = (x===3 && y===3) ? -0.12 : 0;
+        const p = clamp(d + edge + centerPenalty, 0, 0.40);
+        if (rand() < p) walls.add(key(x,y));
       }
     }
-    return false;
-  }
 
-  function bombBlastCells(x,y,range){
-    const cells = [{x,y}];
-    const dirs = [[1,0],[-1,0],[0,1],[0,-1]];
-    for (const [dx,dy] of dirs){
-      for (let k=1;k<=range;k++){
-        const nx=x+dx*k, ny=y+dy*k;
-        const t = tileAt(nx,ny);
-        if (t === 1) break; // solid wall blocks
-        cells.push({x:nx,y:ny});
-        if (t === 2) break; // crate stops blast after breaking
-      }
-    }
-    return cells;
-  }
+    return walls;
+  };
 
-  function genRound(){
-    const rec = director.recommend();
-    const d = rec.difficulty;
-    const assist = rec.assist;
+  const newMatch = () => {
+    // New RNG seed per match for variety, but stable in a single match.
+    rng = mulberry32(((seedBase ^ (S.games + 1) * 2654435761) >>> 0) ^ (Date.now() >>> 0));
 
-    // parameters controlled by flow director
-    const crateDensity = clamp(0.28 + d*0.20 - assist*0.10, 0.22, 0.55);
-    const enemyCount = Math.round(clamp(1 + d*3.6, 1, 5));
-    const enemyCD = clamp(520 - d*260 + assist*120, 260, 720); // lower = faster
-
-    // grid
-    grid = Array.from({length:N}, (_,y)=>Array.from({length:N},(_,x)=>{
-      const border = (x===0||y===0||x===N-1||y===N-1);
-      if (border) return 1;
-      // classic “pillars”
-      if (x%2===0 && y%2===0) return 1;
-      return 0;
-    }));
-
-    // safe spawn zone around player
-    const safe = new Set(["1,1","1,2","2,1"]);
-    // crates
-    for (let y=1;y<N-1;y++){
-      for (let x=1;x<N-1;x++){
-        if (grid[y][x] !== 0) continue;
-        if (safe.has(`${x},${y}`)) continue;
-        if (rand() < crateDensity) grid[y][x]=2;
-      }
-    }
-
-    powerups = [];
-    bombs = [];
-    blasts = [];
-
-    player = { x:1, y:1, range:2, bombsMax:1, bombsActive:0 };
-    enemies = [];
-
-    // spawn enemies on far side in empty tiles
-    let tries = 0;
-    while (enemies.length < enemyCount && tries < 5000){
-      tries++;
-      const x = 1 + (Math.random()*(N-2)|0);
-      const y = 1 + (Math.random()*(N-2)|0);
-      if (grid[y][x] !== 0) continue;
-      if (Math.abs(x-player.x)+Math.abs(y-player.y) < 6) continue;
-      if (enemies.some(e=>e.x===x && e.y===y)) continue;
-      enemies.push({ x,y, cd: enemyCD, t: rand()*enemyCD, kind: (rand()<d? "chaser":"wander") });
-    }
-
-    // round stats
-    deathsThisRound = 0;
-    nearMisses = 0;
-    bombsPlaced = 0;
-    bombsHit = 0;
-    roundStartMs = performance.now();
-
-    state = "playing";
-    setBanner(`Round start. Clear enemies. Bomb: <span class="kbd">Space</span>.`, "");
-  }
-
-  function placeBomb(){
-    if (state !== "playing") return;
-    // can't place if already a bomb here
-    if (bombs.some(b=>b.x===player.x && b.y===player.y)) return;
-    // cap bombs
-    const active = bombs.filter(b=>b.owner==="p").length;
-    if (active >= player.bombsMax) return;
+    decisionTimes = [];
+    misclicks = 0;
+    lastInputAt = performance.now();
 
     const rec = director.recommend();
-    const fuseMs = clamp(1900 - rec.difficulty*500 + rec.assist*180, 1200, 2200);
+    const arm = rec.arm;
 
-    bombs.push({ x:player.x, y:player.y, t:fuseMs, fuseMs, range:player.range, owner:"p" });
-    bombsPlaced++;
-  }
+    const walls = generateWalls(arm.obstacles, rec.assist);
 
-  function maybeDropPowerup(x,y){
-    // drop chance scales with assist (more help) + low difficulty
-    const rec = director.recommend();
-    const base = 0.16 + rec.assist*0.12 - rec.difficulty*0.06;
-    if (rand() > clamp(base, 0.08, 0.28)) return;
+    game = {
+      startedAt: performance.now(),
+      endedAt: 0,
+      turn: "player",
+      ap: 2,
+      scores: { player: 0, bot: 0 },
+      walls,
+      objectives: objectivePositions().map((p, i) => ({ ...p, id: i, owner: null })),
+      selectedId: null,
+      highlights: { moves: new Set(), attacks: new Set() },
+      armIdx: rec.idx,
+      armName: arm.name,
+      knobs: {
+        botDepth: arm.botDepth,
+        botRand: arm.botRand,
+        objPressure: arm.objPressure,
+        assist: rec.assist,
+        difficulty: rec.difficulty,
+      },
+      units: [
+        // Player spawns (bottom-left-ish)
+        makeUnit("p1", "player", "scout", 0, 6),
+        makeUnit("p2", "player", "tank",  1, 6),
+        makeUnit("p3", "player", "sniper",0, 5),
 
-    const roll = rand();
-    const type = roll < 0.42 ? "bomb" : roll < 0.78 ? "range" : "life";
-    powerups.push({x,y,type});
-  }
+        // Bot spawns (top-right-ish)
+        makeUnit("b1", "bot", "scout", 6, 0),
+        makeUnit("b2", "bot", "tank",  5, 0),
+        makeUnit("b3", "bot", "sniper",6, 1),
+      ],
+      // Match-level stats
+      stats: {
+        playerActions: 0,
+        botActions: 0,
+        dmgDealtByPlayer: 0,
+        dmgDealtByBot: 0,
+        objectivesHeldTurnsPlayer: 0,
+        objectivesHeldTurnsBot: 0,
+        avgDecisionMs: 0,
+      },
+      over: false,
+      winner: null,
+      lastMsg: "",
+    };
 
-  function collectPowerup(){
-    const idx = powerups.findIndex(p=>p.x===player.x && p.y===player.y);
-    if (idx === -1) return;
-    const p = powerups[idx];
-    powerups.splice(idx,1);
-    if (p.type === "bomb") player.bombsMax = Math.min(player.bombsMax+1, 4);
-    if (p.type === "range") player.range = Math.min(player.range+1, 6);
-    if (p.type === "life") P.lives = Math.min(P.lives+1, 5);
-    saveProgress(P);
-    updateHud();
-  }
+    // Ensure objectives are not walled
+    for (const o of game.objectives) game.walls.delete(key(o.x,o.y));
 
-  function explodeBomb(b){
-    const cells = bombBlastCells(b.x,b.y,b.range);
-
-    // break crates + drop powerups
-    for (const c of cells){
-      if (!inBounds(c.x,c.y)) continue;
-      if (grid[c.y][c.x] === 2){
-        grid[c.y][c.x] = 0;
-        maybeDropPowerup(c.x,c.y);
-        bombsHit++; // count as effective
-      }
+    // Small assist: if assist high, remove a couple walls near player spawn
+    if (game.knobs.assist > 0.65) {
+      const near = [{x:1,y:5},{x:1,y:6},{x:2,y:6},{x:2,y:5}];
+      near.forEach(p => game.walls.delete(key(p.x,p.y)));
     }
 
-    // hit enemies
-    for (let i=enemies.length-1;i>=0;i--){
-      const e = enemies[i];
-      if (cells.some(c=>c.x===e.x && c.y===e.y)){
-        enemies.splice(i,1);
-        P.points += 60;
-        bombsHit++;
-      }
-    }
-
-    // hit player
-    if (cells.some(c=>c.x===player.x && c.y===player.y)){
-      deathsThisRound++;
-      P.lives -= 1;
-      saveProgress(P);
-      updateHud();
-      if (P.lives <= 0){
-        state = "roundover";
-        setBanner(`Game over. Your run ended. Press <b>Reset Progress</b> to restart.`, "bad");
-        return;
-      } else {
-        // respawn
-        player.x = 1; player.y = 1;
-      }
-    }
-
-    blasts.push({ cells, t: 220 }); // ms
-  }
-
-  function enemyChooseMove(e){
-    const rec = director.recommend();
-    const d = rec.difficulty;
-
-    // if in danger, prioritize escaping
-    const dirs = [[1,0],[-1,0],[0,1],[0,-1]];
-    const opts = [];
-    for (const [dx,dy] of dirs){
-      const nx=e.x+dx, ny=e.y+dy;
-      if (tileAt(nx,ny)!==0) continue;
-      if (enemies.some(o=>o!==e && o.x===nx && o.y===ny)) continue;
-      // avoid stepping onto player directly (enemies don't "touch kill" — bombs are the danger)
-      if (nx===player.x && ny===player.y) continue;
-
-      let score = 0;
-
-      // avoid danger
-      if (isDangerCell(nx,ny)) score -= 6;
-      if (isDangerCell(e.x,e.y)) score += 2; // moving out is good
-
-      // chase tendency
-      const distNow = Math.abs(e.x-player.x)+Math.abs(e.y-player.y);
-      const distNext = Math.abs(nx-player.x)+Math.abs(ny-player.y);
-      const chaseWeight = (e.kind==="chaser" ? 1.0 : 0.35) * (0.65 + d*0.70);
-      score += (distNow - distNext) * 1.2 * chaseWeight;
-
-      // slight randomness (lower at high difficulty)
-      score += (Math.random() - 0.5) * (1.6 - d*1.1);
-
-      opts.push({nx,ny,score});
-    }
-
-    // if no move, stay
-    if (!opts.length) return {x:e.x,y:e.y};
-
-    // pick best
-    opts.sort((a,b)=>b.score-a.score);
-    const best = opts[0].score;
-    const margin = 0.8 + (1-d)*1.6;
-    const pool = opts.filter(o=>o.score >= best - margin).slice(0, 4);
-    return pool[(Math.random()*pool.length)|0];
-  }
-
-  function update(dt){
-    if (state !== "playing") return;
-
-    moveCooldown = Math.max(0, moveCooldown - dt);
-
-    // bombs tick
-    for (let i=bombs.length-1;i>=0;i--){
-      bombs[i].t -= dt;
-      if (bombs[i].t <= 0){
-        const b = bombs[i];
-        bombs.splice(i,1);
-        explodeBomb(b);
-        if (state !== "playing") return; // died & ended
-      }
-    }
-
-    // blasts fade
-    for (let i=blasts.length-1;i>=0;i--){
-      blasts[i].t -= dt;
-      if (blasts[i].t <= 0) blasts.splice(i,1);
-    }
-
-    // near miss tracking: player standing in predicted danger
-    if (isDangerCell(player.x,player.y)) nearMisses += dt > 0 ? 0.008 : 0; // slow accumulation
-
-    // enemies tick
-    for (const e of enemies){
-      e.t -= dt;
-      if (e.t <= 0){
-        e.t += e.cd;
-        const mv = enemyChooseMove(e);
-        e.x = mv.x; e.y = mv.y;
-      }
-    }
-
-    collectPowerup();
-
-    // win check
-    if (enemies.length === 0){
-      winRound();
-    }
-  }
-
-  function winRound(){
-    state = "roundover";
-
-    const roundMs = performance.now() - roundStartMs;
-    P.games += 1;
-    P.wins += 1;
-    P.points += WIN_POINTS;
-
-    // bonus for speed + clean play
-    const timeBonus = Math.max(0, 220 - Math.floor(roundMs/1000));
-    P.points += timeBonus;
-
-    // checkpoint lock is automatic by floor logic on losses
-    saveProgress(P);
-
-    director.observeRound({
-      won:true,
-      roundMs,
-      deaths:deathsThisRound,
-      nearMisses:Math.round(nearMisses),
-      bombsPlaced,
-      bombsHit
-    });
-
-    updateHud();
+    paused = false;
+    ui.btnEnd.disabled = false;
+    ui.ratingRow.classList.remove("show");
 
     setBanner(
-      `Victory! +${WIN_POINTS} pts (+${timeBonus} time bonus). Press <b>Start</b> for the next round.`,
-      "good"
+      `Match started (<b>${game.armName}</b>). You have <b>2 AP</b>. Hold objectives to score. Select a unit to begin.`,
+      ""
     );
-  }
-
-  function loseRound(){
-    state = "roundover";
-
-    const roundMs = performance.now() - roundStartMs;
-    P.games += 1;
-    P.losses += 1;
-
-    const { base } = checkpointInfo(P.points);
-    P.points = Math.max(P.points + LOSS_POINTS, base);
-
-    saveProgress(P);
-
-    director.observeRound({
-      won:false,
-      roundMs,
-      deaths:deathsThisRound,
-      nearMisses:Math.round(nearMisses),
-      bombsPlaced,
-      bombsHit
-    });
 
     updateHud();
+    recomputeHighlights();
+    draw();
+  };
 
-    setBanner(
-      `Defeat. ${LOSS_POINTS} pts, but your checkpoint floor holds. Press <b>Start</b> to try again.`,
-      "bad"
-    );
-  }
+  const endTurn = () => {
+    if (!game || game.over) return;
 
-  function tryMove(dx,dy){
-    if (state !== "playing") return;
-    if (moveCooldown > 0) return;
+    // End-of-turn scoring: each objective held gives 1 VP
+    const heldBy = (side) => game.objectives.filter(o => o.owner === side).length;
 
-    const nx = player.x + dx;
-    const ny = player.y + dy;
-    if (tileAt(nx,ny) !== 0) return;
-    if (enemies.some(e=>e.x===nx && e.y===ny)) return;
-    if (bombs.some(b=>b.x===nx && b.y===ny)) return;
+    const pHeld = heldBy("player");
+    const bHeld = heldBy("bot");
 
-    player.x = nx; player.y = ny;
-    moveCooldown = 90;
-  }
+    game.scores.player += pHeld;
+    game.scores.bot += bHeld;
 
-  // drawing
-  function draw(){
-    const t = TILE();
-    const w = t*N, h=t*N;
+    game.stats.objectivesHeldTurnsPlayer += pHeld;
+    game.stats.objectivesHeldTurnsBot += bHeld;
 
-    // auto-fit canvas backing resolution for crispness
-    const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
-    if (cv.width !== w*dpr || cv.height !== h*dpr){
-      cv.width = w*dpr; cv.height = h*dpr;
-      ctx.setTransform(dpr,0,0,dpr,0,0);
+    // capture ownership: any unit standing on objective claims it
+    for (const o of game.objectives) {
+      const occ = game.units.find(u => u.alive && u.x === o.x && u.y === o.y);
+      if (occ) o.owner = occ.side;
     }
 
-    ctx.clearRect(0,0,w,h);
+    // Win checks
+    const aliveP = game.units.filter(u => u.alive && u.side === "player").length;
+    const aliveB = game.units.filter(u => u.alive && u.side === "bot").length;
 
-    // background grid
-    ctx.fillStyle = "rgba(255,255,255,0.02)";
-    ctx.fillRect(0,0,w,h);
+    if (aliveP === 0) return finishMatch("bot");
+    if (aliveB === 0) return finishMatch("player");
+    if (game.scores.player >= 8) return finishMatch("player");
+    if (game.scores.bot >= 8) return finishMatch("bot");
 
-    // tiles
-    for (let y=0;y<N;y++){
-      for (let x=0;x<N;x++){
-        const px=x*t, py=y*t;
-        const tile = grid.length ? grid[y][x] : 0;
+    // swap
+    game.turn = (game.turn === "player") ? "bot" : "player";
+    game.ap = 2;
+    game.selectedId = null;
+    game.highlights.moves.clear();
+    game.highlights.attacks.clear();
 
-        // base cell
-        ctx.fillStyle = "rgba(255,255,255,0.03)";
-        ctx.fillRect(px+1,py+1,t-2,t-2);
+    if (game.turn === "player") {
+      setBanner(`Your turn. <b>2 AP</b>. Score: You ${game.scores.player} • Bot ${game.scores.bot}`, "");
+      ui.btnEnd.disabled = false;
+      recomputeHighlights();
+      draw();
+    } else {
+      ui.btnEnd.disabled = true;
+      setBanner(`Bot thinking… (depth ${game.knobs.botDepth})`, "");
+      recomputeHighlights();
+      draw();
+      setTimeout(botActLoop, 420);
+    }
+  };
 
-        if (tile === 1){
-          ctx.fillStyle = "rgba(255,255,255,0.14)";
-          ctx.fillRect(px+2,py+2,t-4,t-4);
-        } else if (tile === 2){
-          ctx.fillStyle = "rgba(255,205,90,0.16)";
-          ctx.fillRect(px+2,py+2,t-4,t-4);
-          ctx.strokeStyle = "rgba(255,205,90,0.22)";
-          ctx.strokeRect(px+3,py+3,t-6,t-6);
-        }
-      }
+  const finishMatch = (winner) => {
+    if (!game || game.over) return;
+    game.over = true;
+    game.winner = winner;
+    game.endedAt = performance.now();
+
+    ui.btnEnd.disabled = true;
+    ui.ratingRow.classList.add("show");
+
+    // Compute match outcome points with checkpoint floor
+    const won = (winner === "player");
+    const durationMs = game.endedAt - game.startedAt;
+
+    const pointsBefore = S.points;
+    const { base } = checkpointInfo(pointsBefore);
+
+    if (won) {
+      S.points += WIN_POINTS;
+      S.wins += 1;
+      S.streak = Math.max(1, S.streak + 1);
+      // small bonus for close, well-paced wins
+      const margin = Math.abs(game.scores.player - game.scores.bot);
+      const closeBonus = clamp(1 - margin / 6, 0, 1) * 120;
+      S.points += Math.round(closeBonus);
+    } else {
+      S.losses += 1;
+      S.streak = Math.min(-1, S.streak - 1);
+      S.points = Math.max(S.points + LOSS_POINTS, base);
     }
 
-    // powerups
-    for (const p of powerups){
-      const px=p.x*t, py=p.y*t;
-      ctx.fillStyle = p.type==="bomb" ? "rgba(110,170,255,0.75)"
-                  : p.type==="range"? "rgba(175,110,255,0.75)"
-                  : "rgba(80,220,140,0.75)";
-      ctx.beginPath();
-      ctx.arc(px+t*0.5, py+t*0.5, t*0.16, 0, Math.PI*2);
-      ctx.fill();
-    }
+    S.games += 1;
 
-    // bombs
-    for (const b of bombs){
-      const px=b.x*t, py=b.y*t;
-      const pulse = 0.80 + 0.20*Math.sin((b.fuseMs-b.t)/90);
-      ctx.fillStyle = "rgba(255,255,255,0.78)";
-      ctx.beginPath();
-      ctx.arc(px+t*0.5, py+t*0.52, t*0.18*pulse, 0, Math.PI*2);
-      ctx.fill();
-      ctx.fillStyle = "rgba(0,0,0,0.45)";
-      ctx.beginPath();
-      ctx.arc(px+t*0.5, py+t*0.52, t*0.14*pulse, 0, Math.PI*2);
-      ctx.fill();
-    }
+    // Build observation for models
+    const marginRaw = Math.abs(game.scores.player - game.scores.bot);
+    const margin01 = clamp(1 - marginRaw / 8, 0, 1); // closer -> higher
+    const agency01 = clamp(0.5 + 0.5 * Math.tanh((game.stats.playerActions - 3) / 4), 0, 1);
+    const avgDecision = decisionTimes.length ? decisionTimes.reduce((a,b)=>a+b,0) / decisionTimes.length : 1400;
 
-    // blasts
-    for (const b of blasts){
-      const a = clamp(b.t/220,0,1);
-      ctx.fillStyle = `rgba(255,205,90,${0.28*a})`;
-      for (const c of b.cells){
-        const px=c.x*t, py=c.y*t;
-        ctx.fillRect(px+2,py+2,t-4,t-4);
-      }
-    }
+    // frustration proxy: loss streak, misclicks, low margin when losing, slow decisions
+    const frustration01 = clamp(
+      (won ? 0.18 : 0.45) +
+      clamp((-S.streak) / 6, 0, 1) * 0.25 +
+      clamp(misclicks / 10, 0, 1) * 0.20 +
+      clamp(avgDecision / 2600, 0, 1) * 0.22
+    , 0, 1);
 
-    // enemies
-    for (const e of enemies){
-      const px=e.x*t, py=e.y*t;
-      ctx.fillStyle = e.kind==="chaser" ? "rgba(240,80,90,0.82)" : "rgba(240,130,90,0.78)";
-      ctx.beginPath();
-      ctx.roundRect(px+4, py+4, t-8, t-8, 10);
-      ctx.fill();
-    }
+    // rating will be submitted after user moves the slider; for now store obs without rating
+    game.stats.avgDecisionMs = avgDecision;
 
-    // player
-    if (player){
-      const px=player.x*t, py=player.y*t;
-      ctx.fillStyle = "rgba(80,220,140,0.82)";
-      ctx.beginPath();
-      ctx.roundRect(px+4, py+4, t-8, t-8, 10);
-      ctx.fill();
-      // face dot
-      ctx.fillStyle = "rgba(255,255,255,0.75)";
-      ctx.beginPath();
-      ctx.arc(px+t*0.62, py+t*0.42, t*0.06, 0, Math.PI*2);
-      ctx.fill();
-    }
+    playerModel.observeMatch({
+      won,
+      durationMs,
+      decisionMsAvg: avgDecision,
+      margin01,
+      agency01,
+      frustration01,
+      rating01: null
+    });
 
-    // assist: show predicted danger a bit (only when assist is high)
-    const rec = director.recommend();
-    if (state==="playing" && rec.assist > 0.70){
-      ctx.fillStyle = "rgba(110,170,255,0.10)";
-      for (let y=0;y<N;y++){
-        for (let x=0;x<N;x++){
-          if (isDangerCell(x,y)){
-            ctx.fillRect(x*t+2,y*t+2,t-4,t-4);
-          }
-        }
-      }
-    }
-  }
+    // "Reward" for the director: a flow proxy (close + good pacing + not too frustrating)
+    const paceTarget = 70000;
+    const paceScore = clamp(1 - Math.abs(durationMs - paceTarget) / paceTarget, 0, 1);
+    const reward01 = clamp(
+      0.45 * margin01 +
+      0.25 * paceScore +
+      0.20 * agency01 -
+      0.25 * frustration01 +
+      0.10 * (won ? 1 : 0)
+    , 0, 1);
 
-  function loop(now){
-    const dt = Math.min(50, now - last);
-    last = now;
+    director.updateAfterMatch(reward01);
 
-    if (state === "playing"){
-      // input
-      if (keyState.has("ArrowUp") || keyState.has("KeyW")) tryMove(0,-1);
-      if (keyState.has("ArrowDown") || keyState.has("KeyS")) tryMove(0,1);
-      if (keyState.has("ArrowLeft") || keyState.has("KeyA")) tryMove(-1,0);
-      if (keyState.has("ArrowRight") || keyState.has("KeyD")) tryMove(1,0);
+    save(S);
+    updateHud();
+    updateTrack();
 
-      update(dt);
-
-      // if lives dropped mid-round but not dead, continue
-      if (state==="playing" && P.lives <= 0){
-        state="roundover";
-      }
-
-      // if player has 0 lives => game over already handled
-      if (state==="playing" && deathsThisRound > 0 && P.lives > 0){
-        // if you died this round, treat as a loss of the round (keeps loop clear)
-        loseRound();
-      }
+    // Healthy nudge if fatigue high
+    if (S.fatigue > 0.75) {
+      setBanner(
+        `${won ? "Win" : "Loss"} recorded. Score: You ${game.scores.player} • Bot ${game.scores.bot}.<br><b>Heads up:</b> you’ve been playing hard — consider a short break.`,
+        "warn"
+      );
+    } else {
+      setBanner(
+        `${won ? "Victory!" : "Defeat."} Score: You ${game.scores.player} • Bot ${game.scores.bot}.<br>Adjusting for flow: next match will tune difficulty & pacing.`,
+        won ? "good" : "bad"
+      );
     }
 
     draw();
-    requestAnimationFrame(loop);
-  }
+  };
 
-  // events
-  window.addEventListener("keydown", (e)=>{
-    if (["ArrowUp","ArrowDown","ArrowLeft","ArrowRight","Space"].includes(e.code)) e.preventDefault();
+  // ---------------------------------------------------------
+  // Action generation
+  // ---------------------------------------------------------
+  const getUnit = (id) => game.units.find(u => u.id === id);
 
-    if (e.code === "Space"){
-      if (state==="playing") placeBomb();
+  const neighbors = (x, y) => ([
+    {x:x+1,y}, {x:x-1,y}, {x,y:y+1}, {x,y:y-1}
+  ]).filter(p => inBounds(p.x, p.y));
+
+  const reachable = (g, unit) => {
+    const maxD = unitDefs[unit.type].move;
+    const start = { x: unit.x, y: unit.y };
+    const q = [start];
+    const dist = new Map([[key(start.x,start.y), 0]]);
+    while (q.length) {
+      const cur = q.shift();
+      const d = dist.get(key(cur.x,cur.y));
+      if (d >= maxD) continue;
+      for (const nb of neighbors(cur.x, cur.y)) {
+        const k = key(nb.x, nb.y);
+        if (dist.has(k)) continue;
+        if (g.walls.has(k)) continue;
+        if (g.units.some(u => u.alive && u.x === nb.x && u.y === nb.y && u.id !== unit.id)) continue;
+        dist.set(k, d + 1);
+        q.push(nb);
+      }
+    }
+    dist.delete(key(start.x,start.y));
+    return dist; // Map tileKey -> steps
+  };
+
+  const attackables = (g, unit) => {
+    const range = unitDefs[unit.type].range;
+    const targets = [];
+    for (const other of g.units) {
+      if (!other.alive) continue;
+      if (other.side === unit.side) continue;
+      const d = Math.abs(other.x - unit.x) + Math.abs(other.y - unit.y);
+      if (d > range) continue;
+      // Sniper requires line of sight if not adjacent too; others require adjacency/rook line? We'll use LoS for sniper, adjacency for tank, rook/adj for scout
+      if (unit.type === "sniper") {
+        if (!losClear(g, unit.x, unit.y, other.x, other.y)) continue;
+      } else if (unit.type === "tank") {
+        if (d !== 1) continue;
+      } else {
+        // scout: can attack within range if rook line clear OR adjacent
+        if (d !== 1 && !losClear(g, unit.x, unit.y, other.x, other.y)) continue;
+      }
+      targets.push(other);
+    }
+    return targets;
+  };
+
+  const recomputeHighlights = () => {
+    if (!game) return;
+    game.highlights.moves.clear();
+    game.highlights.attacks.clear();
+
+    if (game.turn !== "player" || game.over) return;
+    const sel = game.selectedId ? getUnit(game.selectedId) : null;
+    if (!sel || !sel.alive || sel.side !== "player") return;
+
+    if (game.ap <= 0) return;
+
+    const r = reachable(game, sel);
+    for (const k of r.keys()) game.highlights.moves.add(k);
+
+    const atks = attackables(game, sel);
+    for (const t of atks) game.highlights.attacks.add(key(t.x,t.y));
+  };
+
+  const applyMove = (g, unitId, x, y) => {
+    const u = g.units.find(z => z.id === unitId);
+    if (!u || !u.alive) return false;
+    if (tileBlocked(g, x, y)) return false;
+    u.x = x; u.y = y;
+    return true;
+  };
+
+  const applyAttack = (g, attackerId, targetId) => {
+    const a = g.units.find(z => z.id === attackerId);
+    const t = g.units.find(z => z.id === targetId);
+    if (!a || !t || !a.alive || !t.alive) return false;
+    const dmg = unitDefs[a.type].dmg;
+    t.hp -= dmg;
+    if (t.hp <= 0) { t.hp = 0; t.alive = false; }
+    return true;
+  };
+
+  const endOfActionCapture = (g) => {
+    // If any unit stands on an objective, claim it immediately (more tactical)
+    for (const o of g.objectives) {
+      const occ = g.units.find(u => u.alive && u.x === o.x && u.y === o.y);
+      if (occ) o.owner = occ.side;
+    }
+  };
+
+  // Player input action handler
+  const recordDecisionTime = () => {
+    const now = performance.now();
+    const dt = now - lastInputAt;
+    lastInputAt = now;
+    if (dt > 80 && dt < 12000) decisionTimes.push(dt);
+  };
+
+  const tryPlayerClick = (gx, gy) => {
+    if (!game || paused || game.over) return;
+    if (game.turn !== "player") return;
+
+    const clickedUnit = game.units.find(u => u.alive && u.x === gx && u.y === gy);
+
+    // Select your unit
+    if (clickedUnit && clickedUnit.side === "player") {
+      game.selectedId = clickedUnit.id;
+      recomputeHighlights();
+      draw();
       return;
     }
 
-    keyState.add(e.code);
+    // Need selection to act
+    const sel = game.selectedId ? getUnit(game.selectedId) : null;
+    if (!sel || !sel.alive || sel.side !== "player") { misclicks++; return; }
+    if (game.ap <= 0) { misclicks++; return; }
 
-    if (e.code === "KeyP"){
-      togglePause();
-    }
-  }, {passive:false});
+    // Attack if enemy on tile and attackable
+    if (clickedUnit && clickedUnit.side === "bot") {
+      const atks = attackables(game, sel);
+      const ok = atks.some(t => t.id === clickedUnit.id);
+      if (!ok) { misclicks++; return; }
 
-  window.addEventListener("keyup", (e)=>{
-    keyState.delete(e.code);
-  });
+      recordDecisionTime();
+      applyAttack(game, sel.id, clickedUnit.id);
+      game.stats.playerActions += 1;
+      game.stats.dmgDealtByPlayer += 1;
+      game.ap -= 1;
+      endOfActionCapture(game);
 
-  function togglePause(){
-    if (state==="playing"){
-      state="paused";
-      setBanner("Paused. Press <b>P</b> or click Pause to resume.", "");
-    } else if (state==="paused"){
-      state="playing";
-      setBanner("Back in. Clear enemies.", "");
-    }
-  }
+      // auto-end if ap 0
+      game.selectedId = null;
+      recomputeHighlights();
+      draw();
 
-  ui.start.addEventListener("click", ()=>{
-    if (state==="playing") return;
-    if (P.lives <= 0){
-      setBanner("You’re out of lives. Click <b>Reset Progress</b> to restart the run.", "bad");
+      // win check could happen on endTurn too; but allow instant finish if elimination
+      const aliveB = game.units.filter(u => u.alive && u.side === "bot").length;
+      if (aliveB === 0) return finishMatch("player");
+
+      if (game.ap <= 0) return endTurn();
+      setBanner(`Nice hit. You have <b>${game.ap} AP</b> left.`, "");
+      ui.btnEnd.disabled = false;
       return;
     }
-    genRound();
-    updateHud();
+
+    // Move if tile is reachable
+    const reachMap = reachable(game, sel);
+    const k = key(gx, gy);
+    if (!reachMap.has(k)) { misclicks++; return; }
+
+    recordDecisionTime();
+    applyMove(game, sel.id, gx, gy);
+    game.stats.playerActions += 1;
+    game.ap -= 1;
+    endOfActionCapture(game);
+
+    game.selectedId = null;
+    recomputeHighlights();
+    draw();
+
+    if (game.ap <= 0) return endTurn();
+    setBanner(`Moved. You have <b>${game.ap} AP</b> left.`, "");
+    ui.btnEnd.disabled = false;
+  };
+
+  // ---------------------------------------------------------
+  // Bot AI
+  //  - Generates candidate actions (limited branching)
+  //  - Evaluates via heuristic + lookahead depth (1..3)
+  //  - Adds adaptive randomness (botRand)
+  // ---------------------------------------------------------
+  const scoreState = (g) => {
+    // Bot-centric evaluation: higher = better for bot
+    const aliveP = g.units.filter(u => u.alive && u.side === "player");
+    const aliveB = g.units.filter(u => u.alive && u.side === "bot");
+
+    const hpP = aliveP.reduce((s,u)=>s+u.hp,0);
+    const hpB = aliveB.reduce((s,u)=>s+u.hp,0);
+
+    const scoreDiff = (g.scores.bot - g.scores.player) * 1.8;
+    const hpDiff = (hpB - hpP) * 1.25;
+
+    // Objective control pressure
+    const objDiff = g.objectives.reduce((s,o)=>{
+      if (o.owner === "bot") return s + 1;
+      if (o.owner === "player") return s - 1;
+      return s;
+    },0) * (1.2 * g.knobs.objPressure);
+
+    // Positioning: closer to objectives is good
+    const distToNearestObj = (u) => g.objectives.reduce((best,o)=>{
+      const d = Math.abs(u.x-o.x) + Math.abs(u.y-o.y);
+      return Math.min(best, d);
+    }, 99);
+
+    const posB = aliveB.reduce((s,u)=>s + (6 - distToNearestObj(u)) * 0.16, 0);
+    const posP = aliveP.reduce((s,u)=>s + (6 - distToNearestObj(u)) * 0.16, 0);
+
+    // Encourage snipers to keep LoS lanes: small bonus if they have a valid shot
+    const snipeBonus = aliveB.reduce((s,u)=>{
+      if (u.type !== "sniper") return s;
+      const t = attackables(g, u);
+      return s + (t.length ? 0.75 : 0);
+    },0);
+
+    return scoreDiff + hpDiff + objDiff + (posB - posP) + snipeBonus;
+  };
+
+  const genActionsForSide = (g, side) => {
+    // One-AP actions: move or attack (fortify removed for simplicity/clarity)
+    const actions = [];
+
+    const units = g.units.filter(u => u.alive && u.side === side);
+    for (const u of units) {
+      // Attacks first (high value)
+      for (const t of attackables(g, u)) {
+        actions.push({ type: "attack", unitId: u.id, targetId: t.id });
+      }
+
+      // Moves (limit branching: keep top-K tiles)
+      const reachMap = reachable(g, u);
+      const tiles = [];
+      for (const [k, steps] of reachMap.entries()) {
+        const [x,y] = k.split(",").map(Number);
+        tiles.push({ x, y, steps });
+      }
+
+      // heuristic: prefer tiles nearer objectives / creating shots
+      tiles.sort((a,b)=>{
+        const ao = g.objectives.reduce((best,o)=>Math.min(best, Math.abs(a.x-o.x)+Math.abs(a.y-o.y)), 99);
+        const bo = g.objectives.reduce((best,o)=>Math.min(best, Math.abs(b.x-o.x)+Math.abs(b.y-o.y)), 99);
+        return ao - bo;
+      });
+
+      const K = 8; // cap
+      for (const t of tiles.slice(0, K)) {
+        actions.push({ type: "move", unitId: u.id, x: t.x, y: t.y });
+      }
+    }
+
+    return actions;
+  };
+
+  const applyAction = (g, a) => {
+    if (a.type === "move") {
+      const ok = applyMove(g, a.unitId, a.x, a.y);
+      if (!ok) return false;
+      endOfActionCapture(g);
+      return true;
+    }
+    if (a.type === "attack") {
+      const ok = applyAttack(g, a.unitId, a.targetId);
+      if (!ok) return false;
+      endOfActionCapture(g);
+      return true;
+    }
+    return false;
+  };
+
+  const minimax = (g, depth, maximizing, alpha, beta) => {
+    // Terminal check
+    const aliveP = g.units.filter(u => u.alive && u.side === "player").length;
+    const aliveB = g.units.filter(u => u.alive && u.side === "bot").length;
+    if (aliveP === 0) return 9999;
+    if (aliveB === 0) return -9999;
+    if (g.scores.bot >= 8) return 9999;
+    if (g.scores.player >= 8) return -9999;
+
+    if (depth <= 0) return scoreState(g);
+
+    const side = maximizing ? "bot" : "player";
+    const acts = genActionsForSide(g, side);
+    if (!acts.length) return scoreState(g);
+
+    if (maximizing) {
+      let best = -Infinity;
+      for (const a of acts) {
+        const ng = cloneGame(g);
+        const ok = applyAction(ng, a);
+        if (!ok) continue;
+        const val = minimax(ng, depth - 1, false, alpha, beta);
+        best = Math.max(best, val);
+        alpha = Math.max(alpha, val);
+        if (beta <= alpha) break;
+      }
+      return best;
+    } else {
+      let best = Infinity;
+      for (const a of acts) {
+        const ng = cloneGame(g);
+        const ok = applyAction(ng, a);
+        if (!ok) continue;
+        const val = minimax(ng, depth - 1, true, alpha, beta);
+        best = Math.min(best, val);
+        beta = Math.min(beta, val);
+        if (beta <= alpha) break;
+      }
+      return best;
+    }
+  };
+
+  const chooseBotAction = (g) => {
+    const depth = clamp(g.knobs.botDepth, 1, 3);
+    const randomness = clamp(g.knobs.botRand, 0.05, 0.70);
+
+    const acts = genActionsForSide(g, "bot");
+    if (!acts.length) return null;
+
+    // Evaluate each action with minimax lookahead
+    const scored = acts.map(a => {
+      const ng = cloneGame(g);
+      const ok = applyAction(ng, a);
+      if (!ok) return { a, s: -Infinity };
+      const s = minimax(ng, depth - 1, false, -Infinity, Infinity);
+      return { a, s };
+    }).filter(x => Number.isFinite(x.s));
+
+    scored.sort((x,y)=>y.s - x.s);
+    const best = scored[0].s;
+
+    // Randomness: pick from within margin around best
+    const margin = 0.8 + randomness * 2.2;
+    const pool = scored.filter(x => x.s >= best - margin).slice(0, 8);
+
+    // Softmax-ish sampling (adds variety without becoming dumb)
+    const temps = clamp(0.30 + randomness * 0.85, 0.25, 1.10);
+    const weights = pool.map(x => Math.exp((x.s - best) / temps));
+    const sum = weights.reduce((a,b)=>a+b,0) || 1;
+    let r = rand() * sum;
+    for (let i=0;i<pool.length;i++){
+      r -= weights[i];
+      if (r <= 0) return pool[i].a;
+    }
+    return pool[0].a;
+  };
+
+  const botActOnce = () => {
+    if (!game || game.over || paused) return;
+    if (game.turn !== "bot") return;
+
+    const a = chooseBotAction(game);
+    if (!a) { game.ap = 0; return; }
+
+    applyAction(game, a);
+    game.stats.botActions += 1;
+    if (a.type === "attack") game.stats.dmgDealtByBot += 1;
+
+    game.ap -= 1;
+
+    // immediate win checks
+    const aliveP = game.units.filter(u => u.alive && u.side === "player").length;
+    if (aliveP === 0) return finishMatch("bot");
+
+    draw();
+  };
+
+  const botActLoop = () => {
+    if (!game || game.over || paused) return;
+    if (game.turn !== "bot") return;
+
+    // Bot uses its 2 AP with pacing
+    botActOnce();
+    if (!game || game.over) return;
+
+    if (game.ap > 0) {
+      setTimeout(() => {
+        botActOnce();
+        if (!game || game.over) return;
+        endTurn(); // ends bot turn and flips back to player
+      }, 520);
+    } else {
+      endTurn();
+    }
+  };
+
+  // ---------------------------------------------------------
+  // Rendering
+  // ---------------------------------------------------------
+  const resizeCanvasBacking = () => {
+    const size = Math.min(900, Math.floor(cv.getBoundingClientRect().width || 900));
+    const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+    cv.width = size * dpr;
+    cv.height = size * dpr;
+    cv.style.width = size + "px";
+    cv.style.height = size + "px";
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  };
+
+  const draw = () => {
+    resizeCanvasBacking();
+    const t = (cv.width / (window.devicePixelRatio || 1)) / N;
+    const w = t * N;
+
+    ctx.clearRect(0,0,w,w);
+
+    // background cells
+    for (let y=0;y<N;y++){
+      for (let x=0;x<N;x++){
+        ctx.fillStyle = "rgba(255,255,255,0.03)";
+        ctx.fillRect(x*t+1,y*t+1,t-2,t-2);
+
+        // highlights
+        if (game && game.turn==="player" && !game.over) {
+          const k = key(x,y);
+          if (game.highlights.moves.has(k)) {
+            ctx.fillStyle = COLORS.hi;
+            ctx.fillRect(x*t+2,y*t+2,t-4,t-4);
+          }
+          if (game.highlights.attacks.has(k)) {
+            ctx.fillStyle = COLORS.atk;
+            ctx.fillRect(x*t+2,y*t+2,t-4,t-4);
+          }
+        }
+
+        // walls
+        if (game && game.walls.has(key(x,y))) {
+          ctx.fillStyle = COLORS.wall;
+          ctx.fillRect(x*t+3,y*t+3,t-6,t-6);
+        }
+      }
+    }
+
+    if (!game) {
+      // title
+      ctx.fillStyle = COLORS.text;
+      ctx.font = `900 ${Math.round(t*0.26)}px system-ui`;
+      ctx.fillText("Click New Match", t*0.7, t*1.2);
+      return;
+    }
+
+    // objectives
+    for (const o of game.objectives) {
+      const cx = o.x*t + t*0.5, cy = o.y*t + t*0.5;
+      const base = (o.owner==="player") ? "rgba(80,220,140,0.25)" : (o.owner==="bot") ? "rgba(240,80,90,0.25)" : "rgba(175,110,255,0.18)";
+      ctx.fillStyle = base;
+      ctx.beginPath();
+      ctx.arc(cx, cy, t*0.28, 0, Math.PI*2);
+      ctx.fill();
+
+      ctx.strokeStyle = (o.owner==="player") ? "rgba(80,220,140,0.55)" : (o.owner==="bot") ? "rgba(240,80,90,0.55)" : "rgba(175,110,255,0.45)";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(cx, cy, t*0.28, 0, Math.PI*2);
+      ctx.stroke();
+    }
+
+    // units
+    for (const u of game.units) {
+      if (!u.alive) continue;
+      const cx = u.x*t + t*0.5, cy = u.y*t + t*0.5;
+      const fill = (u.side==="player") ? COLORS.player : COLORS.bot;
+
+      // selection ring
+      if (game.turn==="player" && game.selectedId === u.id) {
+        ctx.strokeStyle = "rgba(255,205,90,0.85)";
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.arc(cx, cy, t*0.33, 0, Math.PI*2);
+        ctx.stroke();
+      }
+
+      ctx.fillStyle = fill;
+      ctx.beginPath();
+      ctx.roundRect(cx - t*0.30, cy - t*0.30, t*0.60, t*0.60, 12);
+      ctx.fill();
+
+      // unit letter
+      ctx.fillStyle = "rgba(0,0,0,0.55)";
+      ctx.font = `950 ${Math.round(t*0.22)}px system-ui`;
+      const letter = (u.type==="scout") ? "S" : (u.type==="tank") ? "T" : "N";
+      ctx.fillText(letter, cx - t*0.07, cy + t*0.08);
+
+      // HP bar
+      const hpW = t*0.62, hpH = t*0.08;
+      const x0 = cx - hpW/2, y0 = cy + t*0.28;
+      ctx.fillStyle = "rgba(255,255,255,0.10)";
+      ctx.fillRect(x0, y0, hpW, hpH);
+      ctx.fillStyle = "rgba(255,255,255,0.70)";
+      ctx.fillRect(x0, y0, hpW * (u.hp / u.hpMax), hpH);
+    }
+
+    // top overlay text
+    ctx.fillStyle = COLORS.muted;
+    ctx.font = `900 ${Math.round(t*0.14)}px system-ui`;
+    ctx.fillText(
+      `Turn: ${game.turn.toUpperCase()}  AP: ${game.ap}   Score: YOU ${game.scores.player} • BOT ${game.scores.bot}   Mode: ${game.armName}`,
+      t*0.18, t*0.30
+    );
+  };
+
+  // ---------------------------------------------------------
+  // Canvas click handling
+  // ---------------------------------------------------------
+  const canvasToGrid = (evt) => {
+    const rect = cv.getBoundingClientRect();
+    const x = evt.clientX - rect.left;
+    const y = evt.clientY - rect.top;
+    const gx = Math.floor(x / (rect.width / N));
+    const gy = Math.floor(y / (rect.height / N));
+    return { gx, gy };
+  };
+
+  cv.addEventListener("click", (evt) => {
+    if (!game) return;
+    if (paused) return;
+
+    const { gx, gy } = canvasToGrid(evt);
+    if (!inBounds(gx, gy)) return;
+
+    tryPlayerClick(gx, gy);
   });
 
-  ui.pause.addEventListener("click", togglePause);
+  // ---------------------------------------------------------
+  // Rating submission (optional)
+  // ---------------------------------------------------------
+  ui.btnSubmitRating.addEventListener("click", () => {
+    if (!game || !game.over) return;
 
-  ui.reset.addEventListener("click", ()=>{
-    P = resetProgress();
-    saveProgress(P);
-    // rebuild director with fresh progress
-    Object.assign(director.p, P);
-    state="menu";
-    grid = Array.from({length:N}, ()=>Array.from({length:N}, ()=>0));
-    enemies=[]; bombs=[]; blasts=[]; powerups=[];
-    player={x:1,y:1,range:2,bombsMax:1};
-    setBanner("Progress reset. Press <b>Start</b>.", "");
+    const rating = Number(ui.rating.value || 4);
+    const rating01 = clamp((rating - 1) / 4, 0, 1);
+
+    // Use rating to refine engagement/flow estimates + director reward
+    const won = (game.winner === "player");
+    const durationMs = game.endedAt - game.startedAt;
+    const marginRaw = Math.abs(game.scores.player - game.scores.bot);
+    const margin01 = clamp(1 - marginRaw / 8, 0, 1);
+    const agency01 = clamp(0.5 + 0.5 * Math.tanh((game.stats.playerActions - 3) / 4), 0, 1);
+    const avgDecision = game.stats.avgDecisionMs || 1400;
+
+    const frustration01 = clamp(
+      (won ? 0.18 : 0.45) +
+      clamp((-S.streak) / 6, 0, 1) * 0.25 +
+      clamp(misclicks / 10, 0, 1) * 0.20 +
+      clamp(avgDecision / 2600, 0, 1) * 0.22
+    , 0, 1);
+
+    // Update player model again with rating included (small corrective)
+    playerModel.observeMatch({
+      won, durationMs, decisionMsAvg: avgDecision, margin01, agency01, frustration01, rating01
+    });
+
+    // Update director with a rating-augmented reward
+    const paceTarget = 70000;
+    const paceScore = clamp(1 - Math.abs(durationMs - paceTarget) / paceTarget, 0, 1);
+    const reward01 = clamp(
+      0.35 * margin01 +
+      0.20 * paceScore +
+      0.15 * agency01 +
+      0.25 * rating01 -
+      0.25 * frustration01 +
+      0.05 * (won ? 1 : 0)
+    , 0, 1);
+
+    director.updateAfterMatch(reward01);
+
+    save(S);
     updateHud();
+    ui.ratingRow.classList.remove("show");
+
+    setBanner("Rating saved. Thanks — it helps the director tune flow in a healthy way.", "good");
   });
 
-  // init
-  grid = Array.from({length:N}, ()=>Array.from({length:N}, ()=>0));
-  player = {x:1,y:1,range:2,bombsMax:1};
+  // ---------------------------------------------------------
+  // Buttons
+  // ---------------------------------------------------------
+  ui.btnNew.addEventListener("click", () => newMatch());
+  ui.btnEnd.addEventListener("click", () => endTurn());
+  ui.btnPause.addEventListener("click", () => {
+    paused = !paused;
+    if (paused) {
+      setBanner("Paused. Click Pause again to resume.", "warn");
+    } else if (game && !game.over) {
+      setBanner(`Resumed. Turn: <b>${game.turn}</b>. AP: <b>${game.ap}</b>.`, "");
+    }
+    draw();
+  });
+  ui.btnReset.addEventListener("click", () => {
+    S = reset();
+    save(S);
+    // rebuild models
+    location.reload();
+  });
+
+  // Init
   updateHud();
-  setBanner('Press <b>Start</b>. Move: <span class="kbd">WASD</span>/<span class="kbd">Arrows</span> • Bomb: <span class="kbd">Space</span> • Pause: <span class="kbd">P</span>.', "");
-  requestAnimationFrame(loop);
+  draw();
 })();
 </script>
 </body>
