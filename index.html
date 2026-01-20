@@ -3,34 +3,47 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Checkpoint Command</title>
-  <link rel="stylesheet" href="styles.css" />
+  <title>Beacon Tactics</title>
+  <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
   <div class="app">
     <header class="top-bar">
       <div class="brand">
-        <span class="brand-title">Checkpoint Command</span>
-        <span class="brand-subtitle">Strategic duels, infinite levels, checkpoint safety</span>
+        <div class="brand-title">Beacon Tactics</div>
+        <div class="brand-subtitle">Turn-based grid strategy • checkpoints • flow director</div>
       </div>
-      <div class="scoreboard">
-        <div class="score-card">
-          <span class="score-label">Points</span>
-          <span id="pointsValue" class="score-value">0</span>
+
+      <div class="hud">
+        <div class="hud-card">
+          <div class="hud-label">Points</div>
+          <div id="pointsValue" class="hud-value">0</div>
         </div>
-        <div class="score-card">
-          <span class="score-label">Win Rate</span>
-          <span id="winRateValue" class="score-value">0%</span>
+        <div class="hud-card">
+          <div class="hud-label">Win Rate</div>
+          <div id="winRateValue" class="hud-value">0%</div>
+        </div>
+        <div class="hud-card">
+          <div class="hud-label">Flow</div>
+          <div class="hud-value">
+            <span id="flowValue">—</span>
+            <span class="mini">(targeted)</span>
+          </div>
         </div>
       </div>
     </header>
+
     <div id="appError" class="app-error" role="alert" hidden></div>
 
     <main class="screens">
+      <!-- Checkpoints -->
       <section id="checkpointScreen" class="screen active">
         <div class="checkpoint-hero">
-          <h1>Reach the next checkpoint</h1>
-          <p>Every 1,000 points is a level. Wins are +100, losses are -100, and checkpoints lock your progress.</p>
+          <h1>Checkpoint Run</h1>
+          <p>
+            Every 1,000 points is a level. Wins are +100, losses are -100,
+            and checkpoints lock your progress (you can’t fall below a checkpoint).
+          </p>
         </div>
 
         <div class="track-panel">
@@ -39,30 +52,48 @@
               <span class="meta-label">Current Level</span>
               <span id="checkpointValue" class="meta-value">0</span>
             </div>
+            <div class="track-badges">
+              <span id="directorBadge" class="badge">Flow Director: ON</span>
+              <span id="assistBadge" class="badge subtle">Assist: Auto</span>
+            </div>
           </div>
+
           <div class="track" aria-label="Checkpoint progress">
             <div class="track-line"></div>
             <div id="trackFill" class="track-fill"></div>
             <div id="checkpointDots" class="track-dots"></div>
           </div>
+
           <div class="track-footer">
             <div>
               <span class="meta-label">Next Checkpoint</span>
               <span id="nextCheckpoint" class="meta-value next-checkpoint">1,000 pts</span>
+            </div>
+            <div class="mini">
+              Win/loss points apply, but checkpoints lock your floor.
             </div>
           </div>
         </div>
 
         <div class="cta-wrap">
           <button id="playBtn" class="primary">Play Match</button>
+          <button id="resetRunBtn" class="secondary">Reset Progress</button>
+        </div>
+
+        <div class="mini tip">
+          Tip: This game is skill-based. The director adapts difficulty + pacing to keep you in a flow zone (not too easy, not too brutal).
         </div>
       </section>
 
+      <!-- Game -->
       <section id="gameScreen" class="screen">
         <div class="game-header">
           <div>
-            <h2>Gridfront Skirmish</h2>
-            <p>Command three units, capture control nodes, and outplay the bot in turn-based clashes.</p>
+            <h2>Beacon Tactics</h2>
+            <p>
+              Capture beacons, win duels, and manage tempo. You get <b>2 actions per turn</b>.
+              Click your selected unit again to <b>Fortify</b>.
+            </p>
           </div>
           <button id="backBtn" class="secondary">Back to Checkpoints</button>
         </div>
@@ -74,35 +105,57 @@
               <span><span id="turnOwner">Player</span> · <span id="turnValue">1</span></span>
             </div>
             <div class="meta-card">
-              <span class="meta-label">Player Control</span>
-              <span id="playerControl">0</span>
+              <span class="meta-label">Actions Left</span>
+              <span id="actionsLeftValue">2</span>
             </div>
             <div class="meta-card">
-              <span class="meta-label">Bot Control</span>
-              <span id="botControl">0</span>
+              <span class="meta-label">Beacons</span>
+              <span><span id="playerBeacons">0</span> - <span id="botBeacons">0</span></span>
             </div>
             <div class="meta-card">
-              <span class="meta-label">Selected Unit</span>
+              <span class="meta-label">Selected</span>
               <span id="selectedUnit">None</span>
             </div>
           </div>
-          <div id="turnBanner" class="result-banner">Deploy units to begin the skirmish.</div>
+
+          <div class="director-strip">
+            <div class="director-pill">
+              <span class="pill-label">Difficulty</span>
+              <span id="difficultyValue" class="pill-value">—</span>
+            </div>
+            <div class="director-pill">
+              <span class="pill-label">Pacing</span>
+              <span id="pacingValue" class="pill-value">—</span>
+            </div>
+            <div class="director-pill">
+              <span class="pill-label">Assist</span>
+              <span id="assistValue" class="pill-value">—</span>
+            </div>
+            <div class="director-pill">
+              <span class="pill-label">Beat</span>
+              <span id="beatValue" class="pill-value">—</span>
+            </div>
+          </div>
+
+          <div id="turnBanner" class="result-banner">Press Start Match to deploy.</div>
+
           <div class="game-grid-wrap">
             <div id="gameBoard" class="game-grid" role="grid" aria-label="Strategy grid"></div>
           </div>
+
           <div class="game-actions">
             <button id="startMatchBtn" class="primary">Start Match</button>
             <button id="endTurnBtn" class="secondary" disabled>End Turn</button>
-            <button id="resetRunBtn" class="secondary">Reset Progress</button>
           </div>
+
           <div class="game-help">
             <div class="help-title">How to Play</div>
             <ul>
-              <li>Select one of your units, then click an adjacent tile to move or an adjacent enemy to attack.</li>
-              <li>Control nodes (glowing tiles) add control points at the end of your turn.</li>
-              <li>First to 6 control points or the last side standing wins the match.</li>
-              <li><b>New:</b> You have <b>2 actions per turn</b>. Clicking your selected unit again will <b>Fortify</b> (gain a shield).</li>
-              <li><b>New:</b> Snipers can attack from <b>2 tiles away</b> in straight lines.</li>
+              <li>Each turn you have <b>2 actions</b>: move, attack, or fortify.</li>
+              <li>Click your selected unit again to <b>Fortify</b> (+1 shield blocks 1 hit).</li>
+              <li>Beacons (glowing) score at <b>end of your turn</b> if occupied.</li>
+              <li>Snipers can attack up to <b>2 tiles</b> in straight lines.</li>
+              <li>Win by reaching <b>5 beacon points</b> or eliminating all enemy units.</li>
             </ul>
           </div>
         </div>
@@ -110,6 +163,7 @@
     </main>
   </div>
 
+  <script src="./flow_engine.js" defer></script>
   <script src="./app.js" defer></script>
 </body>
 </html>
