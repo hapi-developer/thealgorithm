@@ -1,169 +1,892 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Beacon Tactics</title>
-  <link rel="stylesheet" href="./styles.css" />
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>BlastGrid</title>
+<style>
+  :root{
+    --bg:#0b0f1a; --panel:rgba(255,255,255,.06); --line:rgba(255,255,255,.14);
+    --text:rgba(255,255,255,.92); --muted:rgba(255,255,255,.62);
+    --accent:rgba(110,170,255,.95); --good:rgba(80,220,140,.92); --bad:rgba(240,80,90,.92);
+    --r:16px;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; min-height:100vh; color:var(--text);
+    font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+    background: radial-gradient(1100px 700px at 10% 10%, rgba(110,170,255,.12), transparent),
+                radial-gradient(900px 700px at 90% 20%, rgba(175,110,255,.10), transparent),
+                var(--bg);
+  }
+  .app{max-width:1060px;margin:0 auto;padding:14px}
+  .top{
+    display:flex;gap:12px;align-items:center;justify-content:space-between;
+    padding:14px;border-radius:var(--r);background:var(--panel);border:1px solid var(--line);
+    flex-wrap:wrap;
+  }
+  .brand{display:flex;flex-direction:column;gap:4px}
+  .title{font-weight:900;letter-spacing:.2px}
+  .sub{color:var(--muted);font-size:13px}
+  .hud{display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end}
+  .card{
+    padding:10px 12px;border-radius:14px;background:rgba(255,255,255,.08);
+    border:1px solid var(--line);min-width:120px
+  }
+  .label{color:var(--muted);font-size:12px}
+  .value{font-weight:900;font-size:16px}
+  .row{margin-top:12px;display:grid;grid-template-columns:1.2fr .8fr;gap:12px}
+  @media (max-width:880px){.row{grid-template-columns:1fr}}
+  .panel{
+    padding:14px;border-radius:var(--r);background:var(--panel);border:1px solid var(--line);
+  }
+  .btns{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
+  button{
+    appearance:none;border:1px solid var(--line);border-radius:14px;
+    padding:10px 14px;font-weight:900;cursor:pointer;color:var(--text);
+    background:rgba(255,255,255,.06);
+  }
+  button.primary{background:linear-gradient(90deg,rgba(110,170,255,.28),rgba(175,110,255,.22))}
+  button:disabled{opacity:.5;cursor:not-allowed}
+  .hint{color:var(--muted);font-size:13px;line-height:1.4}
+  .banner{
+    margin-top:10px;padding:12px 14px;border-radius:14px;border:1px solid var(--line);
+    background:rgba(255,255,255,.05);font-weight:900;
+  }
+  .banner.good{border-color:rgba(80,220,140,.35);background:rgba(80,220,140,.12)}
+  .banner.bad{border-color:rgba(240,80,90,.35);background:rgba(240,80,90,.12)}
+  canvas{
+    width:100%;height:auto;aspect-ratio:1/1;border-radius:var(--r);
+    border:1px solid var(--line);background:rgba(255,255,255,.03);
+    display:block;
+  }
+  .mini{font-size:12px;color:var(--muted)}
+  .kbd{font-family:ui-monospace,Menlo,Consolas,monospace;padding:2px 6px;border:1px solid var(--line);
+       border-radius:8px;background:rgba(255,255,255,.06);color:var(--text)}
+  .track{
+    margin-top:10px;position:relative;height:56px;border-radius:14px;
+    background:rgba(255,255,255,.04);border:1px solid var(--line);overflow:hidden;
+  }
+  .track-line{position:absolute;left:14px;right:14px;top:28px;height:4px;border-radius:99px;background:rgba(255,255,255,.10)}
+  .track-fill{position:absolute;left:14px;top:28px;height:4px;border-radius:99px;
+    width:0%;transition:width 240ms ease;background:linear-gradient(90deg,var(--accent),rgba(175,110,255,.95))}
+  .track-dots{position:absolute;left:14px;right:14px;top:18px;display:flex;justify-content:space-between;align-items:center;pointer-events:none}
+  .dot{width:14px;height:14px;border-radius:999px;border:2px solid rgba(255,255,255,.32);background:rgba(10,12,20,.9);position:relative}
+  .dot span{position:absolute;top:18px;left:50%;transform:translateX(-50%);font-size:11px;color:var(--muted);white-space:nowrap}
+  .dot.reached{border-color:rgba(80,220,140,.65);box-shadow:0 0 0 3px rgba(80,220,140,.12)}
+  .dot.current{border-color:rgba(255,205,90,.75);box-shadow:0 0 0 4px rgba(255,205,90,.14)}
+  .dot.next{border-color:rgba(110,170,255,.85);box-shadow:0 0 0 5px rgba(110,170,255,.14);transform:scale(1.15)}
+</style>
 </head>
 <body>
-  <div class="app">
-    <header class="top-bar">
-      <div class="brand">
-        <div class="brand-title">Beacon Tactics</div>
-        <div class="brand-subtitle">Turn-based grid strategy • checkpoints • flow director</div>
-      </div>
-
-      <div class="hud">
-        <div class="hud-card">
-          <div class="hud-label">Points</div>
-          <div id="pointsValue" class="hud-value">0</div>
-        </div>
-        <div class="hud-card">
-          <div class="hud-label">Win Rate</div>
-          <div id="winRateValue" class="hud-value">0%</div>
-        </div>
-        <div class="hud-card">
-          <div class="hud-label">Flow</div>
-          <div class="hud-value">
-            <span id="flowValue">—</span>
-            <span class="mini">(targeted)</span>
-          </div>
-        </div>
-      </div>
-    </header>
-
-    <div id="appError" class="app-error" role="alert" hidden></div>
-
-    <main class="screens">
-      <!-- Checkpoints -->
-      <section id="checkpointScreen" class="screen active">
-        <div class="checkpoint-hero">
-          <h1>Checkpoint Run</h1>
-          <p>
-            Every 1,000 points is a level. Wins are +100, losses are -100,
-            and checkpoints lock your progress (you can’t fall below a checkpoint).
-          </p>
-        </div>
-
-        <div class="track-panel">
-          <div class="track-header">
-            <div>
-              <span class="meta-label">Current Level</span>
-              <span id="checkpointValue" class="meta-value">0</span>
-            </div>
-            <div class="track-badges">
-              <span id="directorBadge" class="badge">Flow Director: ON</span>
-              <span id="assistBadge" class="badge subtle">Assist: Auto</span>
-            </div>
-          </div>
-
-          <div class="track" aria-label="Checkpoint progress">
-            <div class="track-line"></div>
-            <div id="trackFill" class="track-fill"></div>
-            <div id="checkpointDots" class="track-dots"></div>
-          </div>
-
-          <div class="track-footer">
-            <div>
-              <span class="meta-label">Next Checkpoint</span>
-              <span id="nextCheckpoint" class="meta-value next-checkpoint">1,000 pts</span>
-            </div>
-            <div class="mini">
-              Win/loss points apply, but checkpoints lock your floor.
-            </div>
-          </div>
-        </div>
-
-        <div class="cta-wrap">
-          <button id="playBtn" class="primary">Play Match</button>
-          <button id="resetRunBtn" class="secondary">Reset Progress</button>
-        </div>
-
-        <div class="mini tip">
-          Tip: This game is skill-based. The director adapts difficulty + pacing to keep you in a flow zone (not too easy, not too brutal).
-        </div>
-      </section>
-
-      <!-- Game -->
-      <section id="gameScreen" class="screen">
-        <div class="game-header">
-          <div>
-            <h2>Beacon Tactics</h2>
-            <p>
-              Capture beacons, win duels, and manage tempo. You get <b>2 actions per turn</b>.
-              Click your selected unit again to <b>Fortify</b>.
-            </p>
-          </div>
-          <button id="backBtn" class="secondary">Back to Checkpoints</button>
-        </div>
-
-        <div class="game-panel">
-          <div class="game-meta">
-            <div class="meta-card">
-              <span class="meta-label">Turn</span>
-              <span><span id="turnOwner">Player</span> · <span id="turnValue">1</span></span>
-            </div>
-            <div class="meta-card">
-              <span class="meta-label">Actions Left</span>
-              <span id="actionsLeftValue">2</span>
-            </div>
-            <div class="meta-card">
-              <span class="meta-label">Beacons</span>
-              <span><span id="playerBeacons">0</span> - <span id="botBeacons">0</span></span>
-            </div>
-            <div class="meta-card">
-              <span class="meta-label">Selected</span>
-              <span id="selectedUnit">None</span>
-            </div>
-          </div>
-
-          <div class="director-strip">
-            <div class="director-pill">
-              <span class="pill-label">Difficulty</span>
-              <span id="difficultyValue" class="pill-value">—</span>
-            </div>
-            <div class="director-pill">
-              <span class="pill-label">Pacing</span>
-              <span id="pacingValue" class="pill-value">—</span>
-            </div>
-            <div class="director-pill">
-              <span class="pill-label">Assist</span>
-              <span id="assistValue" class="pill-value">—</span>
-            </div>
-            <div class="director-pill">
-              <span class="pill-label">Beat</span>
-              <span id="beatValue" class="pill-value">—</span>
-            </div>
-          </div>
-
-          <div id="turnBanner" class="result-banner">Press Start Match to deploy.</div>
-
-          <div class="game-grid-wrap">
-            <div id="gameBoard" class="game-grid" role="grid" aria-label="Strategy grid"></div>
-          </div>
-
-          <div class="game-actions">
-            <button id="startMatchBtn" class="primary">Start Match</button>
-            <button id="endTurnBtn" class="secondary" disabled>End Turn</button>
-          </div>
-
-          <div class="game-help">
-            <div class="help-title">How to Play</div>
-            <ul>
-              <li>Each turn you have <b>2 actions</b>: move, attack, or fortify.</li>
-              <li>Click your selected unit again to <b>Fortify</b> (+1 shield blocks 1 hit).</li>
-              <li>Beacons (glowing) score at <b>end of your turn</b> if occupied.</li>
-              <li>Snipers can attack up to <b>2 tiles</b> in straight lines.</li>
-              <li>Win by reaching <b>5 beacon points</b> or eliminating all enemy units.</li>
-            </ul>
-          </div>
-        </div>
-      </section>
-    </main>
+<div class="app">
+  <div class="top">
+    <div class="brand">
+      <div class="title">BlastGrid</div>
+      <div class="sub">Grid bombs • quick tactics • flow-balanced difficulty</div>
+    </div>
+    <div class="hud">
+      <div class="card"><div class="label">Points</div><div id="points" class="value">0</div></div>
+      <div class="card"><div class="label">Checkpoint Level</div><div id="level" class="value">0</div></div>
+      <div class="card"><div class="label">Flow</div><div id="flow" class="value">—</div></div>
+      <div class="card"><div class="label">Difficulty</div><div id="diff" class="value">—</div></div>
+      <div class="card"><div class="label">Lives</div><div id="lives" class="value">3</div></div>
+    </div>
   </div>
 
-  <script src="./flow_engine.js" defer></script>
-  <script src="./app.js" defer></script>
+  <div class="row">
+    <div class="panel">
+      <canvas id="cv" width="900" height="900" aria-label="BlastGrid canvas"></canvas>
+      <div id="banner" class="banner">Press <b>Start</b>. Move with <span class="kbd">WASD</span>/<span class="kbd">Arrows</span>, bomb with <span class="kbd">Space</span>.</div>
+
+      <div class="track" aria-label="Checkpoint progress">
+        <div class="track-line"></div>
+        <div id="trackFill" class="track-fill"></div>
+        <div id="dots" class="track-dots"></div>
+      </div>
+      <div class="mini" style="margin-top:8px">
+        Every 1,000 points is a checkpoint. Losses can’t drop you below your checkpoint floor.
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="hint">
+        <b>Goal:</b> clear all enemies.<br><br>
+        <b>Powerups:</b><br>
+        • +Bomb (carry more)<br>
+        • +Range (bigger blast)<br>
+        • +Life<br><br>
+        <b>Tips:</b> Use crates as shields, bait enemies into lanes, and plan escape routes.
+      </div>
+
+      <div class="btns">
+        <button id="start" class="primary">Start</button>
+        <button id="pause">Pause</button>
+        <button id="reset">Reset Progress</button>
+      </div>
+
+      <div class="mini" style="margin-top:10px">
+        This adapts to keep challenge ≈ skill (flow), not to “trap” you.
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  "use strict";
+
+  // ----------------------------
+  // Checkpoints / Progress
+  // ----------------------------
+  const STORAGE_KEY = "blastgrid_progress_v1";
+  const CHECKPOINT = 1000;
+  const WIN_POINTS = 250;
+  const LOSS_POINTS = -150;
+
+  const defaultProgress = () => ({
+    points: 0,
+    lives: 3,
+    games: 0,
+    wins: 0,
+    losses: 0,
+    winRateEma: 0.55,
+    skill: 0.50,
+    fatigue: 0.00,
+    volatility: 0.20,
+    difficultyBias: 0.00,
+    lastFlow: 0.70
+  });
+
+  const loadProgress = () => {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return defaultProgress();
+    try { return { ...defaultProgress(), ...JSON.parse(raw) }; }
+    catch { return defaultProgress(); }
+  };
+  const saveProgress = (p) => localStorage.setItem(STORAGE_KEY, JSON.stringify(p));
+  const resetProgress = () => { localStorage.removeItem(STORAGE_KEY); return defaultProgress(); };
+
+  const checkpointInfo = (points) => {
+    const p = Math.max(0, points|0);
+    const level = Math.floor(p / CHECKPOINT);
+    const base = level * CHECKPOINT;
+    const next = (level + 1) * CHECKPOINT;
+    const prog = (p - base) / CHECKPOINT;
+    return { level, base, next, prog };
+  };
+
+  // ----------------------------
+  // Flow Director (healthy)
+  // ----------------------------
+  function clamp(v,a,b){ return Math.min(Math.max(v,a),b); }
+  function lerp(a,b,t){ return a + (b-a)*t; }
+
+  class FlowDirector {
+    constructor(progress){
+      this.p = progress;
+      this.targetWin = 0.60;
+      this.targetRoundMs = 55000; // "ideal" round length
+    }
+
+    // Convert skill + outcomes into a difficulty between 0.15..0.95
+    recommend(){
+      const winRate = (this.p.games ? this.p.wins / this.p.games : this.targetWin);
+      const wrGap = clamp(winRate - this.targetWin, -0.5, 0.5);
+
+      let d = 0.45;
+      d = lerp(d, this.p.skill, 0.80);
+      d += wrGap * 0.55;
+      d -= this.p.fatigue * 0.35;
+      d += this.p.difficultyBias;
+
+      d = clamp(d, 0.15, 0.95);
+
+      // Assist: more when fatigue high or loss streak
+      const losing = this.p.losses >= 2 && this.p.wins === 0;
+      let assist = 0.35 + this.p.fatigue * 0.45 + (losing ? 0.10 : 0);
+      assist = clamp(assist, 0.10, 0.95);
+
+      const flow = clamp(1 - Math.abs(d - this.p.skill) * 1.4 - this.p.fatigue * 0.35, 0, 1);
+
+      return { difficulty: d, assist, flow };
+    }
+
+    // Called at end of a round
+    observeRound({ won, roundMs, deaths, nearMisses, bombsPlaced, bombsHit }){
+      // winrate EMA (smooth)
+      const alpha = 0.10;
+      const reward = won ? 1 : 0;
+      this.p.winRateEma = this.p.winRateEma + alpha * (reward - this.p.winRateEma);
+
+      // performance score -> skill update
+      const timeScore = clamp(1 - (roundMs / this.targetRoundMs - 1) * 0.6, 0, 1); // faster than target => higher
+      const deathPenalty = clamp(deaths * 0.35, 0, 1);
+      const missPenalty = clamp(nearMisses * 0.08, 0, 0.6);
+
+      const efficiency = bombsPlaced > 0 ? clamp(bombsHit / bombsPlaced, 0, 1) : 0.2;
+      const effScore = 0.35 + 0.65 * efficiency;
+
+      let perf = 0.45 * timeScore + 0.35 * effScore + 0.20 * reward;
+      perf -= deathPenalty * 0.55;
+      perf -= missPenalty * 0.25;
+      perf = clamp(perf, 0, 1);
+
+      // skill moves slowly
+      this.p.skill = clamp(this.p.skill + (perf - this.p.skill) * 0.12, 0.05, 0.95);
+
+      // fatigue rises with long rounds + many near misses + deaths, decays with wins
+      const long = clamp((roundMs - this.targetRoundMs) / this.targetRoundMs, 0, 1);
+      const fatigueUp = clamp(0.10 * long + 0.05 * nearMisses + 0.18 * deaths, 0, 0.55);
+      const fatigueDown = won ? 0.10 : 0.03;
+      this.p.fatigue = clamp(this.p.fatigue + fatigueUp - fatigueDown, 0, 1);
+
+      // difficultyBias nudges toward target winrate
+      const winRate = (this.p.games ? this.p.wins / this.p.games : this.targetWin);
+      const wrGap = clamp(winRate - this.targetWin, -0.5, 0.5);
+      this.p.difficultyBias = clamp(this.p.difficultyBias + wrGap * 0.03, -0.18, 0.18);
+
+      // compute flow
+      const rec = this.recommend();
+      this.p.lastFlow = rec.flow;
+    }
+  }
+
+  // ----------------------------
+  // Game: BlastGrid
+  // ----------------------------
+  const cv = document.getElementById("cv");
+  const ctx = cv.getContext("2d");
+  const ui = {
+    points: document.getElementById("points"),
+    level: document.getElementById("level"),
+    flow: document.getElementById("flow"),
+    diff: document.getElementById("diff"),
+    lives: document.getElementById("lives"),
+    banner: document.getElementById("banner"),
+    start: document.getElementById("start"),
+    pause: document.getElementById("pause"),
+    reset: document.getElementById("reset"),
+    trackFill: document.getElementById("trackFill"),
+    dots: document.getElementById("dots"),
+  };
+
+  let P = loadProgress();
+  const director = new FlowDirector(P);
+
+  // Grid size: classic-ish, but compact
+  const N = 11;
+  const TILE = () => Math.floor(Math.min(cv.width, cv.height) / N);
+
+  // Tiles: 0 empty, 1 solid, 2 crate
+  let grid = [];
+  let powerups = []; // {x,y,type}
+  let bombs = [];    // {x,y,t, fuseMs, range}
+  let blasts = [];   // {cells:[{x,y}], t, ms}
+  let enemies = [];  // {x,y,cd,kind}
+  let player = null; // {x,y,range,bombsMax,bombsPlaced,lives}
+
+  let state = "menu"; // menu | playing | paused | roundover
+  let last = performance.now();
+  let keyState = new Set();
+  let moveCooldown = 0;
+
+  // round stats
+  let roundStartMs = 0;
+  let deathsThisRound = 0;
+  let nearMisses = 0;
+  let bombsPlaced = 0;
+  let bombsHit = 0;
+
+  function setBanner(msg, mood=""){
+    ui.banner.classList.remove("good","bad");
+    if (mood) ui.banner.classList.add(mood);
+    ui.banner.innerHTML = msg;
+  }
+
+  function updateHud(){
+    ui.points.textContent = String(P.points|0);
+    const { level, prog } = checkpointInfo(P.points);
+    ui.level.textContent = String(level);
+    ui.lives.textContent = String(P.lives);
+
+    const rec = director.recommend();
+    ui.flow.textContent = `${Math.round(rec.flow*100)}%`;
+    ui.diff.textContent = `${Math.round(rec.difficulty*100)}%`;
+
+    ui.trackFill.style.width = `${clamp(prog,0,1)*100}%`;
+    renderDots(level);
+  }
+
+  function renderDots(currentLevel){
+    ui.dots.innerHTML = "";
+    const dotsToShow = 7;
+    const start = Math.max(currentLevel - 3, 0);
+    for (let i=0;i<dotsToShow;i++){
+      const lvl = start + i;
+      const d = document.createElement("div");
+      d.className = "dot";
+      if (lvl < currentLevel) d.classList.add("reached");
+      if (lvl === currentLevel) d.classList.add("current");
+      if (lvl === currentLevel + 1) d.classList.add("next");
+      const s = document.createElement("span");
+      s.textContent = `L${lvl}`;
+      d.appendChild(s);
+      ui.dots.appendChild(d);
+    }
+  }
+
+  function rand(){
+    return Math.random();
+  }
+
+  function inBounds(x,y){ return x>=0 && x<N && y>=0 && y<N; }
+
+  function tileAt(x,y){
+    if (!inBounds(x,y)) return 1;
+    return grid[y][x];
+  }
+
+  function isBlocked(x,y){
+    const t = tileAt(x,y);
+    if (t === 1 || t === 2) return true;
+    if (enemies.some(e=>e.x===x && e.y===y)) return true;
+    return false;
+  }
+
+  function isDangerCell(x,y){
+    // active blasts
+    if (blasts.some(b=>b.cells.some(c=>c.x===x && c.y===y))) return true;
+
+    // bombs about to explode soon (predictive danger)
+    for (const b of bombs){
+      if (b.t <= 450){
+        const cells = bombBlastCells(b.x,b.y,b.range);
+        if (cells.some(c=>c.x===x && c.y===y)) return true;
+      }
+    }
+    return false;
+  }
+
+  function bombBlastCells(x,y,range){
+    const cells = [{x,y}];
+    const dirs = [[1,0],[-1,0],[0,1],[0,-1]];
+    for (const [dx,dy] of dirs){
+      for (let k=1;k<=range;k++){
+        const nx=x+dx*k, ny=y+dy*k;
+        const t = tileAt(nx,ny);
+        if (t === 1) break; // solid wall blocks
+        cells.push({x:nx,y:ny});
+        if (t === 2) break; // crate stops blast after breaking
+      }
+    }
+    return cells;
+  }
+
+  function genRound(){
+    const rec = director.recommend();
+    const d = rec.difficulty;
+    const assist = rec.assist;
+
+    // parameters controlled by flow director
+    const crateDensity = clamp(0.28 + d*0.20 - assist*0.10, 0.22, 0.55);
+    const enemyCount = Math.round(clamp(1 + d*3.6, 1, 5));
+    const enemyCD = clamp(520 - d*260 + assist*120, 260, 720); // lower = faster
+
+    // grid
+    grid = Array.from({length:N}, (_,y)=>Array.from({length:N},(_,x)=>{
+      const border = (x===0||y===0||x===N-1||y===N-1);
+      if (border) return 1;
+      // classic “pillars”
+      if (x%2===0 && y%2===0) return 1;
+      return 0;
+    }));
+
+    // safe spawn zone around player
+    const safe = new Set(["1,1","1,2","2,1"]);
+    // crates
+    for (let y=1;y<N-1;y++){
+      for (let x=1;x<N-1;x++){
+        if (grid[y][x] !== 0) continue;
+        if (safe.has(`${x},${y}`)) continue;
+        if (rand() < crateDensity) grid[y][x]=2;
+      }
+    }
+
+    powerups = [];
+    bombs = [];
+    blasts = [];
+
+    player = { x:1, y:1, range:2, bombsMax:1, bombsActive:0 };
+    enemies = [];
+
+    // spawn enemies on far side in empty tiles
+    let tries = 0;
+    while (enemies.length < enemyCount && tries < 5000){
+      tries++;
+      const x = 1 + (Math.random()*(N-2)|0);
+      const y = 1 + (Math.random()*(N-2)|0);
+      if (grid[y][x] !== 0) continue;
+      if (Math.abs(x-player.x)+Math.abs(y-player.y) < 6) continue;
+      if (enemies.some(e=>e.x===x && e.y===y)) continue;
+      enemies.push({ x,y, cd: enemyCD, t: rand()*enemyCD, kind: (rand()<d? "chaser":"wander") });
+    }
+
+    // round stats
+    deathsThisRound = 0;
+    nearMisses = 0;
+    bombsPlaced = 0;
+    bombsHit = 0;
+    roundStartMs = performance.now();
+
+    state = "playing";
+    setBanner(`Round start. Clear enemies. Bomb: <span class="kbd">Space</span>.`, "");
+  }
+
+  function placeBomb(){
+    if (state !== "playing") return;
+    // can't place if already a bomb here
+    if (bombs.some(b=>b.x===player.x && b.y===player.y)) return;
+    // cap bombs
+    const active = bombs.filter(b=>b.owner==="p").length;
+    if (active >= player.bombsMax) return;
+
+    const rec = director.recommend();
+    const fuseMs = clamp(1900 - rec.difficulty*500 + rec.assist*180, 1200, 2200);
+
+    bombs.push({ x:player.x, y:player.y, t:fuseMs, fuseMs, range:player.range, owner:"p" });
+    bombsPlaced++;
+  }
+
+  function maybeDropPowerup(x,y){
+    // drop chance scales with assist (more help) + low difficulty
+    const rec = director.recommend();
+    const base = 0.16 + rec.assist*0.12 - rec.difficulty*0.06;
+    if (rand() > clamp(base, 0.08, 0.28)) return;
+
+    const roll = rand();
+    const type = roll < 0.42 ? "bomb" : roll < 0.78 ? "range" : "life";
+    powerups.push({x,y,type});
+  }
+
+  function collectPowerup(){
+    const idx = powerups.findIndex(p=>p.x===player.x && p.y===player.y);
+    if (idx === -1) return;
+    const p = powerups[idx];
+    powerups.splice(idx,1);
+    if (p.type === "bomb") player.bombsMax = Math.min(player.bombsMax+1, 4);
+    if (p.type === "range") player.range = Math.min(player.range+1, 6);
+    if (p.type === "life") P.lives = Math.min(P.lives+1, 5);
+    saveProgress(P);
+    updateHud();
+  }
+
+  function explodeBomb(b){
+    const cells = bombBlastCells(b.x,b.y,b.range);
+
+    // break crates + drop powerups
+    for (const c of cells){
+      if (!inBounds(c.x,c.y)) continue;
+      if (grid[c.y][c.x] === 2){
+        grid[c.y][c.x] = 0;
+        maybeDropPowerup(c.x,c.y);
+        bombsHit++; // count as effective
+      }
+    }
+
+    // hit enemies
+    for (let i=enemies.length-1;i>=0;i--){
+      const e = enemies[i];
+      if (cells.some(c=>c.x===e.x && c.y===e.y)){
+        enemies.splice(i,1);
+        P.points += 60;
+        bombsHit++;
+      }
+    }
+
+    // hit player
+    if (cells.some(c=>c.x===player.x && c.y===player.y)){
+      deathsThisRound++;
+      P.lives -= 1;
+      saveProgress(P);
+      updateHud();
+      if (P.lives <= 0){
+        state = "roundover";
+        setBanner(`Game over. Your run ended. Press <b>Reset Progress</b> to restart.`, "bad");
+        return;
+      } else {
+        // respawn
+        player.x = 1; player.y = 1;
+      }
+    }
+
+    blasts.push({ cells, t: 220 }); // ms
+  }
+
+  function enemyChooseMove(e){
+    const rec = director.recommend();
+    const d = rec.difficulty;
+
+    // if in danger, prioritize escaping
+    const dirs = [[1,0],[-1,0],[0,1],[0,-1]];
+    const opts = [];
+    for (const [dx,dy] of dirs){
+      const nx=e.x+dx, ny=e.y+dy;
+      if (tileAt(nx,ny)!==0) continue;
+      if (enemies.some(o=>o!==e && o.x===nx && o.y===ny)) continue;
+      // avoid stepping onto player directly (enemies don't "touch kill" — bombs are the danger)
+      if (nx===player.x && ny===player.y) continue;
+
+      let score = 0;
+
+      // avoid danger
+      if (isDangerCell(nx,ny)) score -= 6;
+      if (isDangerCell(e.x,e.y)) score += 2; // moving out is good
+
+      // chase tendency
+      const distNow = Math.abs(e.x-player.x)+Math.abs(e.y-player.y);
+      const distNext = Math.abs(nx-player.x)+Math.abs(ny-player.y);
+      const chaseWeight = (e.kind==="chaser" ? 1.0 : 0.35) * (0.65 + d*0.70);
+      score += (distNow - distNext) * 1.2 * chaseWeight;
+
+      // slight randomness (lower at high difficulty)
+      score += (Math.random() - 0.5) * (1.6 - d*1.1);
+
+      opts.push({nx,ny,score});
+    }
+
+    // if no move, stay
+    if (!opts.length) return {x:e.x,y:e.y};
+
+    // pick best
+    opts.sort((a,b)=>b.score-a.score);
+    const best = opts[0].score;
+    const margin = 0.8 + (1-d)*1.6;
+    const pool = opts.filter(o=>o.score >= best - margin).slice(0, 4);
+    return pool[(Math.random()*pool.length)|0];
+  }
+
+  function update(dt){
+    if (state !== "playing") return;
+
+    moveCooldown = Math.max(0, moveCooldown - dt);
+
+    // bombs tick
+    for (let i=bombs.length-1;i>=0;i--){
+      bombs[i].t -= dt;
+      if (bombs[i].t <= 0){
+        const b = bombs[i];
+        bombs.splice(i,1);
+        explodeBomb(b);
+        if (state !== "playing") return; // died & ended
+      }
+    }
+
+    // blasts fade
+    for (let i=blasts.length-1;i>=0;i--){
+      blasts[i].t -= dt;
+      if (blasts[i].t <= 0) blasts.splice(i,1);
+    }
+
+    // near miss tracking: player standing in predicted danger
+    if (isDangerCell(player.x,player.y)) nearMisses += dt > 0 ? 0.008 : 0; // slow accumulation
+
+    // enemies tick
+    for (const e of enemies){
+      e.t -= dt;
+      if (e.t <= 0){
+        e.t += e.cd;
+        const mv = enemyChooseMove(e);
+        e.x = mv.x; e.y = mv.y;
+      }
+    }
+
+    collectPowerup();
+
+    // win check
+    if (enemies.length === 0){
+      winRound();
+    }
+  }
+
+  function winRound(){
+    state = "roundover";
+
+    const roundMs = performance.now() - roundStartMs;
+    P.games += 1;
+    P.wins += 1;
+    P.points += WIN_POINTS;
+
+    // bonus for speed + clean play
+    const timeBonus = Math.max(0, 220 - Math.floor(roundMs/1000));
+    P.points += timeBonus;
+
+    // checkpoint lock is automatic by floor logic on losses
+    saveProgress(P);
+
+    director.observeRound({
+      won:true,
+      roundMs,
+      deaths:deathsThisRound,
+      nearMisses:Math.round(nearMisses),
+      bombsPlaced,
+      bombsHit
+    });
+
+    updateHud();
+
+    setBanner(
+      `Victory! +${WIN_POINTS} pts (+${timeBonus} time bonus). Press <b>Start</b> for the next round.`,
+      "good"
+    );
+  }
+
+  function loseRound(){
+    state = "roundover";
+
+    const roundMs = performance.now() - roundStartMs;
+    P.games += 1;
+    P.losses += 1;
+
+    const { base } = checkpointInfo(P.points);
+    P.points = Math.max(P.points + LOSS_POINTS, base);
+
+    saveProgress(P);
+
+    director.observeRound({
+      won:false,
+      roundMs,
+      deaths:deathsThisRound,
+      nearMisses:Math.round(nearMisses),
+      bombsPlaced,
+      bombsHit
+    });
+
+    updateHud();
+
+    setBanner(
+      `Defeat. ${LOSS_POINTS} pts, but your checkpoint floor holds. Press <b>Start</b> to try again.`,
+      "bad"
+    );
+  }
+
+  function tryMove(dx,dy){
+    if (state !== "playing") return;
+    if (moveCooldown > 0) return;
+
+    const nx = player.x + dx;
+    const ny = player.y + dy;
+    if (tileAt(nx,ny) !== 0) return;
+    if (enemies.some(e=>e.x===nx && e.y===ny)) return;
+    if (bombs.some(b=>b.x===nx && b.y===ny)) return;
+
+    player.x = nx; player.y = ny;
+    moveCooldown = 90;
+  }
+
+  // drawing
+  function draw(){
+    const t = TILE();
+    const w = t*N, h=t*N;
+
+    // auto-fit canvas backing resolution for crispness
+    const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+    if (cv.width !== w*dpr || cv.height !== h*dpr){
+      cv.width = w*dpr; cv.height = h*dpr;
+      ctx.setTransform(dpr,0,0,dpr,0,0);
+    }
+
+    ctx.clearRect(0,0,w,h);
+
+    // background grid
+    ctx.fillStyle = "rgba(255,255,255,0.02)";
+    ctx.fillRect(0,0,w,h);
+
+    // tiles
+    for (let y=0;y<N;y++){
+      for (let x=0;x<N;x++){
+        const px=x*t, py=y*t;
+        const tile = grid.length ? grid[y][x] : 0;
+
+        // base cell
+        ctx.fillStyle = "rgba(255,255,255,0.03)";
+        ctx.fillRect(px+1,py+1,t-2,t-2);
+
+        if (tile === 1){
+          ctx.fillStyle = "rgba(255,255,255,0.14)";
+          ctx.fillRect(px+2,py+2,t-4,t-4);
+        } else if (tile === 2){
+          ctx.fillStyle = "rgba(255,205,90,0.16)";
+          ctx.fillRect(px+2,py+2,t-4,t-4);
+          ctx.strokeStyle = "rgba(255,205,90,0.22)";
+          ctx.strokeRect(px+3,py+3,t-6,t-6);
+        }
+      }
+    }
+
+    // powerups
+    for (const p of powerups){
+      const px=p.x*t, py=p.y*t;
+      ctx.fillStyle = p.type==="bomb" ? "rgba(110,170,255,0.75)"
+                  : p.type==="range"? "rgba(175,110,255,0.75)"
+                  : "rgba(80,220,140,0.75)";
+      ctx.beginPath();
+      ctx.arc(px+t*0.5, py+t*0.5, t*0.16, 0, Math.PI*2);
+      ctx.fill();
+    }
+
+    // bombs
+    for (const b of bombs){
+      const px=b.x*t, py=b.y*t;
+      const pulse = 0.80 + 0.20*Math.sin((b.fuseMs-b.t)/90);
+      ctx.fillStyle = "rgba(255,255,255,0.78)";
+      ctx.beginPath();
+      ctx.arc(px+t*0.5, py+t*0.52, t*0.18*pulse, 0, Math.PI*2);
+      ctx.fill();
+      ctx.fillStyle = "rgba(0,0,0,0.45)";
+      ctx.beginPath();
+      ctx.arc(px+t*0.5, py+t*0.52, t*0.14*pulse, 0, Math.PI*2);
+      ctx.fill();
+    }
+
+    // blasts
+    for (const b of blasts){
+      const a = clamp(b.t/220,0,1);
+      ctx.fillStyle = `rgba(255,205,90,${0.28*a})`;
+      for (const c of b.cells){
+        const px=c.x*t, py=c.y*t;
+        ctx.fillRect(px+2,py+2,t-4,t-4);
+      }
+    }
+
+    // enemies
+    for (const e of enemies){
+      const px=e.x*t, py=e.y*t;
+      ctx.fillStyle = e.kind==="chaser" ? "rgba(240,80,90,0.82)" : "rgba(240,130,90,0.78)";
+      ctx.beginPath();
+      ctx.roundRect(px+4, py+4, t-8, t-8, 10);
+      ctx.fill();
+    }
+
+    // player
+    if (player){
+      const px=player.x*t, py=player.y*t;
+      ctx.fillStyle = "rgba(80,220,140,0.82)";
+      ctx.beginPath();
+      ctx.roundRect(px+4, py+4, t-8, t-8, 10);
+      ctx.fill();
+      // face dot
+      ctx.fillStyle = "rgba(255,255,255,0.75)";
+      ctx.beginPath();
+      ctx.arc(px+t*0.62, py+t*0.42, t*0.06, 0, Math.PI*2);
+      ctx.fill();
+    }
+
+    // assist: show predicted danger a bit (only when assist is high)
+    const rec = director.recommend();
+    if (state==="playing" && rec.assist > 0.70){
+      ctx.fillStyle = "rgba(110,170,255,0.10)";
+      for (let y=0;y<N;y++){
+        for (let x=0;x<N;x++){
+          if (isDangerCell(x,y)){
+            ctx.fillRect(x*t+2,y*t+2,t-4,t-4);
+          }
+        }
+      }
+    }
+  }
+
+  function loop(now){
+    const dt = Math.min(50, now - last);
+    last = now;
+
+    if (state === "playing"){
+      // input
+      if (keyState.has("ArrowUp") || keyState.has("KeyW")) tryMove(0,-1);
+      if (keyState.has("ArrowDown") || keyState.has("KeyS")) tryMove(0,1);
+      if (keyState.has("ArrowLeft") || keyState.has("KeyA")) tryMove(-1,0);
+      if (keyState.has("ArrowRight") || keyState.has("KeyD")) tryMove(1,0);
+
+      update(dt);
+
+      // if lives dropped mid-round but not dead, continue
+      if (state==="playing" && P.lives <= 0){
+        state="roundover";
+      }
+
+      // if player has 0 lives => game over already handled
+      if (state==="playing" && deathsThisRound > 0 && P.lives > 0){
+        // if you died this round, treat as a loss of the round (keeps loop clear)
+        loseRound();
+      }
+    }
+
+    draw();
+    requestAnimationFrame(loop);
+  }
+
+  // events
+  window.addEventListener("keydown", (e)=>{
+    if (["ArrowUp","ArrowDown","ArrowLeft","ArrowRight","Space"].includes(e.code)) e.preventDefault();
+
+    if (e.code === "Space"){
+      if (state==="playing") placeBomb();
+      return;
+    }
+
+    keyState.add(e.code);
+
+    if (e.code === "KeyP"){
+      togglePause();
+    }
+  }, {passive:false});
+
+  window.addEventListener("keyup", (e)=>{
+    keyState.delete(e.code);
+  });
+
+  function togglePause(){
+    if (state==="playing"){
+      state="paused";
+      setBanner("Paused. Press <b>P</b> or click Pause to resume.", "");
+    } else if (state==="paused"){
+      state="playing";
+      setBanner("Back in. Clear enemies.", "");
+    }
+  }
+
+  ui.start.addEventListener("click", ()=>{
+    if (state==="playing") return;
+    if (P.lives <= 0){
+      setBanner("You’re out of lives. Click <b>Reset Progress</b> to restart the run.", "bad");
+      return;
+    }
+    genRound();
+    updateHud();
+  });
+
+  ui.pause.addEventListener("click", togglePause);
+
+  ui.reset.addEventListener("click", ()=>{
+    P = resetProgress();
+    saveProgress(P);
+    // rebuild director with fresh progress
+    Object.assign(director.p, P);
+    state="menu";
+    grid = Array.from({length:N}, ()=>Array.from({length:N}, ()=>0));
+    enemies=[]; bombs=[]; blasts=[]; powerups=[];
+    player={x:1,y:1,range:2,bombsMax:1};
+    setBanner("Progress reset. Press <b>Start</b>.", "");
+    updateHud();
+  });
+
+  // init
+  grid = Array.from({length:N}, ()=>Array.from({length:N}, ()=>0));
+  player = {x:1,y:1,range:2,bombsMax:1};
+  updateHud();
+  setBanner('Press <b>Start</b>. Move: <span class="kbd">WASD</span>/<span class="kbd">Arrows</span> • Bomb: <span class="kbd">Space</span> • Pause: <span class="kbd">P</span>.', "");
+  requestAnimationFrame(loop);
+})();
+</script>
 </body>
 </html>
