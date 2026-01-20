@@ -519,3 +519,65 @@ button:disabled {
     align-items: flex-start;
   }
 }
+
+/* === Responsive board sizing override (paste at END of styles.css) === */
+
+.game-grid-wrap {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.game-grid {
+  /* Tile size scales with viewport, stays readable */
+  --tile: clamp(34px, 7.2vmin, 64px);
+
+  width: calc(var(--tile) * 6);
+  max-width: 92vw;
+
+  display: grid;
+  grid-template-columns: repeat(6, var(--tile));
+  grid-auto-rows: var(--tile);
+  gap: clamp(6px, 1.2vmin, 10px);
+}
+
+.grid-tile {
+  width: var(--tile);
+  height: var(--tile);
+  padding: 0;
+}
+
+/* Optional: reduce clutter on small screens */
+@media (max-width: 520px) {
+  .game-panel { padding: 12px; }
+  .game-help { display: none; }
+}
+
+/* === Small extra visuals for skill depth === */
+
+.unit-hp {
+  display: flex;
+  gap: 4px;
+  justify-content: center;
+  margin-top: 4px;
+  flex-wrap: wrap;
+}
+
+.hp-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 99px;
+  opacity: 0.95;
+}
+
+.shield-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
+  opacity: 0.95;
+}
+
+/* Emphasize next checkpoint dot */
+.track-dot.next {
+  transform: scale(1.15);
+}
