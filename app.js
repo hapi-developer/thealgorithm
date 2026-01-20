@@ -1,1004 +1,872 @@
-/* Checkpoint Command — Gridfront Skirmish (skill-based + smarter bot) */
+/* app.js — Beacon Tactics (turn-based grid strategy vs bot)
+   Uses window.FlowDirector for difficulty + flow pacing + assist.
+*/
+(() => {
+  "use strict";
 
-const STORAGE_KEY = "checkpoint_command_state_v1";
-const CHECKPOINT_POINTS = 1000;
-const POINTS_PER_WIN = 100;
-const POINTS_PER_LOSS = -100;
+  // --- checkpoint system ---
+  const STORAGE_KEY = "beacon_tactics_state_v1";
+  const CHECKPOINT_POINTS = 1000;
+  const POINTS_PER_WIN = 100;
+  const POINTS_PER_LOSS = -100;
 
-const GRID_SIZE = 6;
-const UNIT_HP = 2;
-const CONTROL_TARGET = 6;
-const MAX_TURNS = 16;
+  // --- game config ---
+  const SIZE = 7;
+  const ACTIONS_PER_TURN = 2;
+  const WIN_BEACONS = 5;
+  const MAX_TURNS = 18;
 
-const BOT_DELAY = 650;
-const ACTIONS_PER_TURN = 2;
+  const UNIT_HP = 2;
+  const SHIELD_PER_FORTIFY = 1;
+  const SNIPER_RANGE = 2;
 
-const FORTIFY_SHIELD = 1;
-const SNIPER_RANGE = 2;
+  // UI helpers
+  const byId = (id) => document.getElementById(id);
+  const setText = (el, v) => { if (el) el.textContent = String(v); };
 
-const TARGET_WINRATE = 0.58;
+  const clamp = (v, a, b) => Math.min(Math.max(v, a), b);
+  const fmt = (n) => Number(n).toLocaleString("en-US");
 
-let appInitialized = false;
+  // storage state
+  const defaultProgress = () => ({
+    points: 0,
+    wins: 0,
+    losses: 0,
+    totalGames: 0,
+    winRateEma: 0.5,
+    volatility: 0.25,
+    recoveryGames: 0,
+  });
 
-const $ = (id) => {
-  const el = document.getElementById(id);
-  if (!el) console.warn(`Missing element: ${id}`);
-  return el;
-};
-
-const setText = (el, value) => {
-  if (el) el.textContent = value;
-};
-
-const Utils = {
-  clamp(value, min, max) {
-    return Math.min(Math.max(value, min), max);
-  },
-  formatNumber(value) {
-    const n = Number(value);
-    return Number.isFinite(n) ? n.toLocaleString("en-US") : "0";
-  },
-  percentage(value) {
-    const n = Number(value);
-    const safe = Number.isFinite(n) ? n : 0;
-    return `${Math.round(safe * 100)}%`;
-  },
-  shuffle(list) {
-    const result = [...list];
-    for (let i = result.length - 1; i > 0; i -= 1) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [result[i], result[j]] = [result[j], result[i]];
-    }
-    return result;
-  },
-};
-
-const getDefaultState = () => ({
-  points: 0,
-  wins: 0,
-  losses: 0,
-  totalGames: 0,
-  winRateEma: 0.5,
-  volatility: 0.25,
-  recoveryGames: 0,
-  targetWinRate: TARGET_WINRATE,
-  difficultyBias: 0,
-});
-
-const Storage = {
-  load() {
-    try {
+  const Storage = {
+    load() {
       const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return getDefaultState();
-      return { ...getDefaultState(), ...JSON.parse(raw) };
-    } catch {
-      return getDefaultState();
-    }
-  },
-  save(state) {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-    } catch {
-      // ignore
-    }
-  },
-  reset() {
-    try {
-      localStorage.removeItem(STORAGE_KEY);
-    } catch {
-      // ignore
-    }
-    return getDefaultState();
-  },
-};
+      if (!raw) return defaultProgress();
+      try { return { ...defaultProgress(), ...JSON.parse(raw) }; }
+      catch { return defaultProgress(); }
+    },
+    save(s) { localStorage.setItem(STORAGE_KEY, JSON.stringify(s)); },
+    reset() { localStorage.removeItem(STORAGE_KEY); return defaultProgress(); },
+  };
 
-const getCheckpointInfo = (points) => {
-  const p = Math.max(0, Number(points) || 0);
-  const current = Math.floor(p / CHECKPOINT_POINTS);
-  const checkpointBase = current * CHECKPOINT_POINTS;
-  const nextValue = (current + 1) * CHECKPOINT_POINTS;
-  const progress = (p - checkpointBase) / CHECKPOINT_POINTS;
-  return { current, checkpointBase, nextValue, progress };
-};
+  const getWinRate = (s) => (s.totalGames ? s.wins / s.totalGames : 0.5);
 
-const getWinRate = (state) => {
-  if (!state || state.totalGames === 0) return 0.5;
-  return state.wins / state.totalGames;
-};
+  const getCheckpointInfo = (points) => {
+    const p = Math.max(0, Number(points) || 0);
+    const current = Math.floor(p / CHECKPOINT_POINTS);
+    const base = current * CHECKPOINT_POINTS;
+    const next = (current + 1) * CHECKPOINT_POINTS;
+    const prog = (p - base) / CHECKPOINT_POINTS;
+    return { current, base, next, prog };
+  };
 
-/**
- * Adaptive director:
- * - computes difficulty scalar in [0.15..0.95]
- * - maps to aggression/pressure/randomness + depth
- * - nudges difficultyBias toward target winrate over time (fair, no cheating)
- */
-const calculateAdaptiveChallenge = (state) => {
-  const winRate = getWinRate(state);
-  const target = state.targetWinRate ?? TARGET_WINRATE;
+  // director (flow + difficulty + pacing)
+  const director = new window.FlowDirector({
+    targetWinRate: 0.58,
+    turnTimeTargetMs: 7000,
+    actionsPerTurnTarget: ACTIONS_PER_TURN,
+    botDelayMs: 650,
+  });
 
-  const gap = Utils.clamp(winRate - target, -0.5, 0.5);
-  const emaDrift = Utils.clamp(state.winRateEma - target, -0.35, 0.35);
-  const volatility = Utils.clamp(state.volatility, 0.12, 0.45);
-  const bias = Utils.clamp(state.difficultyBias ?? 0, -0.25, 0.25);
+  // DOM
+  const el = {
+    appError: byId("appError"),
 
-  const difficulty = Utils.clamp(
-    0.5 + gap * 0.9 + emaDrift * 0.6 - (volatility - 0.25) * 0.35 + bias,
-    0.15,
-    0.95
-  );
+    checkpointScreen: byId("checkpointScreen"),
+    gameScreen: byId("gameScreen"),
+    playBtn: byId("playBtn"),
+    backBtn: byId("backBtn"),
+    resetRunBtn: byId("resetRunBtn"),
 
-  const aggression = Utils.clamp(0.25 + difficulty * 0.75, 0.25, 0.95);
-  const pressure = Utils.clamp(0.25 + difficulty * 0.70, 0.25, 0.90);
+    pointsValue: byId("pointsValue"),
+    winRateValue: byId("winRateValue"),
+    flowValue: byId("flowValue"),
 
-  // Higher difficulty = less randomness
-  const randomness = Utils.clamp(0.65 - difficulty * 0.55, 0.08, 0.65);
+    checkpointValue: byId("checkpointValue"),
+    nextCheckpoint: byId("nextCheckpoint"),
+    trackFill: byId("trackFill"),
+    checkpointDots: byId("checkpointDots"),
+    directorBadge: byId("directorBadge"),
+    assistBadge: byId("assistBadge"),
 
-  // Depth-2 lookahead kicks in past mid difficulty
-  const depth = difficulty >= 0.58 ? 2 : 1;
+    turnBanner: byId("turnBanner"),
+    turnOwner: byId("turnOwner"),
+    turnValue: byId("turnValue"),
+    actionsLeftValue: byId("actionsLeftValue"),
+    playerBeacons: byId("playerBeacons"),
+    botBeacons: byId("botBeacons"),
+    selectedUnit: byId("selectedUnit"),
 
-  return { winRate, target, difficulty, aggression, pressure, randomness, depth };
-};
+    difficultyValue: byId("difficultyValue"),
+    pacingValue: byId("pacingValue"),
+    assistValue: byId("assistValue"),
+    beatValue: byId("beatValue"),
 
-const updateAdaptiveState = (state, playerWon) => {
-  const reward = playerWon ? 1 : 0;
-  const alpha = 0.08;
+    startMatchBtn: byId("startMatchBtn"),
+    endTurnBtn: byId("endTurnBtn"),
 
-  state.winRateEma = state.winRateEma + alpha * (reward - state.winRateEma);
+    board: byId("gameBoard"),
+  };
 
-  const error = reward - state.winRateEma;
-  state.volatility = Utils.clamp(state.volatility * 0.9 + Math.abs(error) * 0.1, 0.12, 0.45);
-
-  // Learn difficulty bias toward target winrate
-  const target = state.targetWinRate ?? TARGET_WINRATE;
-  const gap = Utils.clamp(getWinRate(state) - target, -0.5, 0.5);
-  state.difficultyBias = Utils.clamp((state.difficultyBias ?? 0) + gap * 0.03, -0.25, 0.25);
-};
-
-const isOneWinFromCheckpoint = (points) => {
-  const { nextValue } = getCheckpointInfo(points);
-  return nextValue - points <= POINTS_PER_WIN;
-};
-
-const updateDirectorState = (state, playerWon, pointsBefore) => {
-  if (!playerWon && isOneWinFromCheckpoint(pointsBefore)) {
-    state.recoveryGames = 2;
+  const requireIds = [
+    "checkpointScreen","gameScreen","playBtn","backBtn","resetRunBtn",
+    "pointsValue","winRateValue","flowValue",
+    "checkpointValue","nextCheckpoint","trackFill","checkpointDots",
+    "turnBanner","turnOwner","turnValue","actionsLeftValue","playerBeacons","botBeacons","selectedUnit",
+    "difficultyValue","pacingValue","assistValue","beatValue",
+    "startMatchBtn","endTurnBtn","gameBoard"
+  ];
+  const missing = requireIds.filter((id) => !byId(id));
+  if (missing.length) {
+    el.appError.hidden = false;
+    el.appError.textContent = `Missing required element(s): ${missing.join(", ")}`;
     return;
   }
-  if (state.recoveryGames > 0) {
-    state.recoveryGames = Math.max(state.recoveryGames - 1, 0);
-  }
-};
 
-const CONTROL_NODES = [
-  { row: 1, col: 2 },
-  { row: 4, col: 2 },
-  { row: 2, col: 4 },
-];
-
-const updateTrack = (state, previousLevel = null) => {
-  const { current, nextValue, progress } = getCheckpointInfo(state.points);
-
-  const trackFill = $("trackFill");
-  const dotsContainer = $("checkpointDots");
-  const trackPanel = document.querySelector(".track-panel");
-
-  if (!trackFill || !dotsContainer) return;
-
-  trackFill.style.width = `${Utils.clamp(progress, 0, 1) * 100}%`;
-
-  dotsContainer.innerHTML = "";
-  const frag = document.createDocumentFragment();
-
-  const dotsToShow = 7;
-  const startLevel = Math.max(current - 3, 0);
-
-  for (let i = 0; i < dotsToShow; i += 1) {
-    const dotLevel = startLevel + i;
-    const dot = document.createElement("div");
-    dot.className = "track-dot";
-
-    const label = document.createElement("span");
-    label.className = "track-dot-label";
-    label.textContent = `L${dotLevel}`;
-    dot.appendChild(label);
-
-    if (dotLevel < current) dot.classList.add("reached");
-    if (dotLevel === current) dot.classList.add("current");
-    if (dotLevel === current + 1) dot.classList.add("next");
-
-    frag.appendChild(dot);
-  }
-
-  dotsContainer.appendChild(frag);
-
-  setText($("checkpointValue"), `${current}`);
-  setText($("nextCheckpoint"), `${Utils.formatNumber(nextValue)} pts`);
-
-  if (trackPanel && previousLevel !== null && current > previousLevel) {
-    trackPanel.classList.remove("celebrate");
-    void trackPanel.offsetWidth;
-    trackPanel.classList.add("celebrate");
-  }
-};
-
-const updateScoreboard = (state) => {
-  setText($("pointsValue"), Utils.formatNumber(state.points));
-  setText($("winRateValue"), Utils.percentage(getWinRate(state)));
-};
-
-const initApp = () => {
-  if (appInitialized) return;
-  appInitialized = true;
-
-  let state = Storage.load();
-
-  const checkpointScreen = $("checkpointScreen");
-  const gameScreen = $("gameScreen");
-  const playBtn = $("playBtn");
-  const backBtn = $("backBtn");
-  const startMatchBtn = $("startMatchBtn");
-  const endTurnBtn = $("endTurnBtn");
-  const resetRunBtn = $("resetRunBtn");
-  const gameBoard = $("gameBoard");
-  const turnBanner = $("turnBanner");
-
-  const turnOwner = $("turnOwner");
-  const turnValue = $("turnValue");
-  const playerControlEl = $("playerControl");
-  const botControlEl = $("botControl");
-  const selectedUnitEl = $("selectedUnit");
-
-  if (!checkpointScreen || !gameScreen || !playBtn || !backBtn || !startMatchBtn || !endTurnBtn || !resetRunBtn || !gameBoard || !turnBanner) {
-    return;
-  }
+  // ---------- game state ----------
+  let progress = Storage.load();
 
   let matchActive = false;
   let activeSide = "player";
-  let turnCount = 1;
-
-  let playerControl = 0;
-  let botControl = 0;
-
-  let selectedUnitId = null;
+  let turn = 1;
   let actionsLeft = ACTIONS_PER_TURN;
 
-  let units = [];
-  let lastPlayerAction = null;
+  let playerBeaconScore = 0;
+  let botBeaconScore = 0;
+
+  let selectedUnitId = null;
   let botTimeout = null;
 
-  const switchScreen = (target) => {
-    if (target === "game") {
-      checkpointScreen.classList.remove("active");
-      gameScreen.classList.add("active");
-    } else {
-      gameScreen.classList.remove("active");
-      checkpointScreen.classList.add("active");
-    }
-  };
+  // timing telemetry
+  let turnStartMs = 0;
+  let actionCountThisTurn = 0;
+  let mistakesThisTurn = 0;
 
-  const getUnitAt = (row, col) => units.find((u) => u.row === row && u.col === col);
+  // map data
+  const BEACONS = [
+    { r: 1, c: 1 },
+    { r: 1, c: 5 },
+    { r: 3, c: 3 },
+    { r: 5, c: 1 },
+    { r: 5, c: 5 },
+  ];
 
-  const setBanner = (message, outcome) => {
-    turnBanner.classList.remove("win", "loss");
-    if (outcome) turnBanner.classList.add(outcome);
-    turnBanner.textContent = message;
-  };
+  let units = [];
 
-  const updateMeta = () => {
-    setText(turnOwner, activeSide === "player" ? "Player" : "Bot");
-    setText(turnValue, `${turnCount}`);
-    setText(playerControlEl, `${playerControl}`);
-    setText(botControlEl, `${botControl}`);
-    const selectedUnit = units.find((u) => u.id === selectedUnitId);
-    setText(selectedUnitEl, selectedUnit ? selectedUnit.label : "None");
-  };
+  const mkUnit = (id, side, type, r, c) => ({
+    id, side, type, r, c,
+    hp: UNIT_HP,
+    shield: 0,
+    label:
+      type === "sniper" ? (side === "player" ? "P-S" : "B-S") :
+      type === "tank" ? (side === "player" ? "P-T" : "B-T") :
+      (side === "player" ? "P" : "B"),
+  });
 
-  const isControlNode = (row, col) => CONTROL_NODES.some((n) => n.row === row && n.col === col);
-
-  const createUnits = () => {
-    // Player: 2 troopers + 1 sniper
-    const playerStarts = [
-      { row: 5, col: 1, type: "trooper" },
-      { row: 5, col: 3, type: "trooper" },
-      { row: 5, col: 5, type: "sniper" },
-    ];
-
-    // Bot: 2 troopers + 1 sniper
-    const botStarts = [
-      { row: 0, col: 0, type: "trooper" },
-      { row: 0, col: 2, type: "trooper" },
-      { row: 0, col: 4, type: "sniper" },
-    ];
-
-    const playerUnits = playerStarts.map((pos, i) => ({
-      id: `p${i + 1}`,
-      side: "player",
-      type: pos.type,
-      row: pos.row,
-      col: pos.col,
-      hp: UNIT_HP,
-      shield: 0,
-      label: pos.type === "sniper" ? `P-S` : `P-${i + 1}`,
-    }));
-
-    const botUnits = botStarts.map((pos, i) => ({
-      id: `b${i + 1}`,
-      side: "bot",
-      type: pos.type,
-      row: pos.row,
-      col: pos.col,
-      hp: UNIT_HP,
-      shield: 0,
-      label: pos.type === "sniper" ? `B-S` : `B-${i + 1}`,
-    }));
-
-    units = [...playerUnits, ...botUnits];
-  };
-
-  const getAdjacentTiles = (row, col) => [
-    { row: row - 1, col },
-    { row: row + 1, col },
-    { row, col: col - 1 },
-    { row, col: col + 1 },
-  ].filter((t) => t.row >= 0 && t.row < GRID_SIZE && t.col >= 0 && t.col < GRID_SIZE);
-
-  const canSeeInLine = (from, to, allUnits) => {
-    // Straight line only, no diagonals
-    if (from.row !== to.row && from.col !== to.col) return false;
-
-    const dr = Math.sign(to.row - from.row);
-    const dc = Math.sign(to.col - from.col);
-
-    const dist = Math.abs(to.row - from.row) + Math.abs(to.col - from.col);
-    if (dist < 1 || dist > SNIPER_RANGE) return false;
-
-    // Check blockers between
-    let r = from.row + dr;
-    let c = from.col + dc;
-    while (r !== to.row || c !== to.col) {
-      const blocked = allUnits.some((u) => u.row === r && u.col === c);
-      if (blocked) return false;
-      r += dr;
-      c += dc;
-    }
-    return true;
-  };
-
-  const getValidActions = (unit, allUnits = units) => {
-    const actions = [];
-
-    // Fortify always available (spends an action)
-    actions.push({ type: "fortify", unitId: unit.id, to: { row: unit.row, col: unit.col } });
-
-    // Adjacent moves/attacks (everyone)
-    getAdjacentTiles(unit.row, unit.col).forEach((tile) => {
-      const occ = allUnits.find((u) => u.row === tile.row && u.col === tile.col);
-      if (!occ) actions.push({ type: "move", unitId: unit.id, to: tile });
-      else if (occ.side !== unit.side) actions.push({ type: "attack", unitId: unit.id, targetId: occ.id, to: tile });
-    });
-
-    // Sniper line attacks (range 2)
-    if (unit.type === "sniper") {
-      const enemies = allUnits.filter((u) => u.side !== unit.side);
-      enemies.forEach((enemy) => {
-        if (canSeeInLine(unit, enemy, allUnits)) {
-          actions.push({
-            type: "attack",
-            unitId: unit.id,
-            targetId: enemy.id,
-            to: { row: enemy.row, col: enemy.col },
-            ranged: true,
-          });
-        }
-      });
-    }
-
-    return actions;
-  };
-
-  const highlightTiles = () => {
-    const tiles = gameBoard.querySelectorAll(".grid-tile");
-    tiles.forEach((t) => t.classList.remove("highlight", "attack"));
-
-    if (!selectedUnitId) return;
-
-    const selectedUnit = units.find((u) => u.id === selectedUnitId);
-    if (!selectedUnit) return;
-
-    // highlight possible target tiles
-    const actions = getValidActions(selectedUnit);
-    actions.forEach((a) => {
-      if (a.type === "fortify") return; // not a tile highlight
-      const tile = gameBoard.querySelector(`[data-row='${a.to.row}'][data-col='${a.to.col}']`);
-      if (!tile) return;
-      tile.classList.add(a.type === "attack" ? "attack" : "highlight");
-    });
-  };
-
-  const renderBoard = () => {
-    gameBoard.innerHTML = "";
-
-    for (let row = 0; row < GRID_SIZE; row += 1) {
-      for (let col = 0; col < GRID_SIZE; col += 1) {
-        const tile = document.createElement("button");
-        tile.type = "button";
-        tile.className = "grid-tile";
-        tile.dataset.row = `${row}`;
-        tile.dataset.col = `${col}`;
-
-        if (isControlNode(row, col)) tile.classList.add("control-node");
-
-        const occ = getUnitAt(row, col);
-        if (occ) {
-          const unitEl = document.createElement("div");
-          unitEl.className = `unit ${occ.side}`;
-
-          const label = document.createElement("div");
-          label.className = "unit-label";
-          label.textContent = occ.label;
-
-          const hpWrap = document.createElement("div");
-          hpWrap.className = "unit-hp";
-
-          // HP dots
-          for (let hp = 0; hp < occ.hp; hp += 1) {
-            const dot = document.createElement("span");
-            dot.className = "hp-dot";
-            hpWrap.appendChild(dot);
-          }
-
-          // Shield dots (small squares)
-          for (let sh = 0; sh < (occ.shield || 0); sh += 1) {
-            const sdot = document.createElement("span");
-            sdot.className = "shield-dot";
-            hpWrap.appendChild(sdot);
-          }
-
-          unitEl.appendChild(label);
-          unitEl.appendChild(hpWrap);
-          tile.appendChild(unitEl);
-        } else if (isControlNode(row, col)) {
-          tile.textContent = "Node";
-        }
-
-        tile.addEventListener("click", () => handleTileClick(row, col));
-        gameBoard.appendChild(tile);
-      }
-    }
-
-    highlightTiles();
-  };
-
-  const countControl = (side) =>
-    CONTROL_NODES.filter((n) => {
-      const occ = getUnitAt(n.row, n.col);
-      return occ && occ.side === side;
-    }).length;
-
-  const checkWin = () => {
-    const playerUnits = units.filter((u) => u.side === "player");
-    const botUnits = units.filter((u) => u.side === "bot");
-
-    if (playerControl >= CONTROL_TARGET || botUnits.length === 0) return "player";
-    if (botControl >= CONTROL_TARGET || playerUnits.length === 0) return "bot";
-
-    if (turnCount > MAX_TURNS) {
-      if (playerControl !== botControl) return playerControl > botControl ? "player" : "bot";
-      // tiebreaker: total HP+shield
-      const pPow = playerUnits.reduce((s, u) => s + u.hp + (u.shield || 0) * 0.6, 0);
-      const bPow = botUnits.reduce((s, u) => s + u.hp + (u.shield || 0) * 0.6, 0);
-      return pPow >= bPow ? "player" : "bot";
-    }
-
-    return null;
-  };
-
-  const resolveMatch = (winner) => {
+  const resetMatchState = () => {
     matchActive = false;
     activeSide = "player";
-    selectedUnitId = null;
+    turn = 1;
     actionsLeft = ACTIONS_PER_TURN;
+    playerBeaconScore = 0;
+    botBeaconScore = 0;
+    selectedUnitId = null;
+    units = [];
+    clearBotTimeout();
+    actionCountThisTurn = 0;
+    mistakesThisTurn = 0;
+    turnStartMs = 0;
+  };
 
-    startMatchBtn.disabled = false;
-    endTurnBtn.disabled = true;
-
+  const clearBotTimeout = () => {
     if (botTimeout) {
       clearTimeout(botTimeout);
       botTimeout = null;
     }
-
-    const pointsBefore = state.points;
-    const previousLevel = getCheckpointInfo(state.points).current;
-
-    const playerWon = winner === "player";
-    if (playerWon) {
-      state.points += POINTS_PER_WIN;
-      state.wins += 1;
-    } else {
-      const { checkpointBase } = getCheckpointInfo(state.points);
-      state.points = Math.max(state.points + POINTS_PER_LOSS, checkpointBase);
-      state.losses += 1;
-    }
-
-    state.totalGames += 1;
-    updateDirectorState(state, playerWon, pointsBefore);
-    updateAdaptiveState(state, playerWon);
-    Storage.save(state);
-
-    updateScoreboard(state);
-    updateTrack(state, previousLevel);
-
-    setBanner(
-      playerWon ? "Victory secured. Checkpoint points locked in." : "Defeat logged. Checkpoints hold the line.",
-      playerWon ? "win" : "loss"
-    );
   };
 
-  const applyActionToUnits = (action, allUnits) => {
-    const unit = allUnits.find((u) => u.id === action.unitId);
-    if (!unit) return allUnits;
+  const switchScreen = (name) => {
+    if (name === "game") {
+      el.checkpointScreen.classList.remove("active");
+      el.gameScreen.classList.add("active");
+    } else {
+      el.gameScreen.classList.remove("active");
+      el.checkpointScreen.classList.add("active");
+    }
+  };
+
+  const setBanner = (msg, outcome) => {
+    el.turnBanner.classList.remove("win", "loss");
+    if (outcome) el.turnBanner.classList.add(outcome);
+    el.turnBanner.textContent = msg;
+  };
+
+  const getCheckpointFloor = (points) => getCheckpointInfo(points).base;
+
+  const updateScoreHud = () => {
+    setText(el.pointsValue, fmt(progress.points));
+    setText(el.winRateValue, `${Math.round(getWinRate(progress) * 100)}%`);
+
+    const rec = director.recommend();
+    setText(el.flowValue, `${Math.round(rec.snapshot.flow * 100)}%`);
+  };
+
+  const updateDirectorStrip = () => {
+    const rec = director.recommend();
+    setText(el.difficultyValue, `${Math.round(rec.difficulty * 100)}%`);
+    setText(el.pacingValue, `${Math.round(rec.pacingMs)}ms`);
+    setText(el.assistValue, rec.assistMode);
+    setText(el.beatValue, rec.beat);
+
+    el.assistBadge.textContent = `Assist: ${rec.assistMode}`;
+  };
+
+  const updateTrack = (previousLevel = null) => {
+    const { current, next, prog } = getCheckpointInfo(progress.points);
+
+    el.trackFill.style.width = `${clamp(prog, 0, 1) * 100}%`;
+    el.checkpointDots.innerHTML = "";
+
+    const dotsToShow = 7;
+    const start = Math.max(current - 3, 0);
+    const frag = document.createDocumentFragment();
+
+    for (let i = 0; i < dotsToShow; i += 1) {
+      const lvl = start + i;
+      const dot = document.createElement("div");
+      dot.className = "track-dot";
+
+      const label = document.createElement("span");
+      label.className = "track-dot-label";
+      label.textContent = `L${lvl}`;
+      dot.appendChild(label);
+
+      if (lvl < current) dot.classList.add("reached");
+      if (lvl === current) dot.classList.add("current");
+      if (lvl === current + 1) dot.classList.add("next");
+
+      frag.appendChild(dot);
+    }
+
+    el.checkpointDots.appendChild(frag);
+
+    setText(el.checkpointValue, String(current));
+    setText(el.nextCheckpoint, `${fmt(next)} pts`);
+
+    if (previousLevel !== null && current > previousLevel) {
+      const panel = document.querySelector(".track-panel");
+      if (panel) {
+        panel.classList.remove("celebrate");
+        void panel.offsetWidth;
+        panel.classList.add("celebrate");
+      }
+    }
+  };
+
+  const updateMeta = () => {
+    setText(el.turnOwner, activeSide === "player" ? "Player" : "Bot");
+    setText(el.turnValue, String(turn));
+    setText(el.actionsLeftValue, String(actionsLeft));
+    setText(el.playerBeacons, String(playerBeaconScore));
+    setText(el.botBeacons, String(botBeaconScore));
+    const u = units.find((x) => x.id === selectedUnitId);
+    setText(el.selectedUnit, u ? u.label : "None");
+  };
+
+  // ---------- rules ----------
+  const inBounds = (r, c) => r >= 0 && r < SIZE && c >= 0 && c < SIZE;
+
+  const isBeacon = (r, c) => BEACONS.some((b) => b.r === r && b.c === c);
+
+  const unitAt = (r, c) => units.find((u) => u.r === r && u.c === c);
+
+  const neighbors4 = (r, c) => ([
+    { r: r - 1, c }, { r: r + 1, c }, { r, c: c - 1 }, { r, c: c + 1 },
+  ]).filter((p) => inBounds(p.r, p.c));
+
+  const canLineAttack = (from, to, allUnits) => {
+    if (from.r !== to.r && from.c !== to.c) return false;
+    const dist = Math.abs(from.r - to.r) + Math.abs(from.c - to.c);
+    if (dist < 1 || dist > SNIPER_RANGE) return false;
+
+    const dr = Math.sign(to.r - from.r);
+    const dc = Math.sign(to.c - from.c);
+
+    let r = from.r + dr;
+    let c = from.c + dc;
+    while (r !== to.r || c !== to.c) {
+      if (allUnits.some((u) => u.r === r && u.c === c)) return false;
+      r += dr; c += dc;
+    }
+    return true;
+  };
+
+  const actionsFor = (unit, allUnits = units) => {
+    const acts = [];
+
+    // Fortify (click same unit) — always available
+    acts.push({ type: "fortify", unitId: unit.id, to: { r: unit.r, c: unit.c } });
+
+    // adjacent move/attack
+    for (const p of neighbors4(unit.r, unit.c)) {
+      const occ = allUnits.find((u) => u.r === p.r && u.c === p.c);
+      if (!occ) acts.push({ type: "move", unitId: unit.id, to: p });
+      else if (occ.side !== unit.side) acts.push({ type: "attack", unitId: unit.id, targetId: occ.id, to: p, ranged: false });
+    }
+
+    // sniper line attack
+    if (unit.type === "sniper") {
+      const enemies = allUnits.filter((u) => u.side !== unit.side);
+      for (const e of enemies) {
+        if (canLineAttack(unit, e, allUnits)) {
+          acts.push({ type: "attack", unitId: unit.id, targetId: e.id, to: { r: e.r, c: e.c }, ranged: true });
+        }
+      }
+    }
+
+    return acts;
+  };
+
+  const applyAction = (action, allUnits) => {
+    const u = allUnits.find((x) => x.id === action.unitId);
+    if (!u) return allUnits;
 
     if (action.type === "fortify") {
-      unit.shield = (unit.shield || 0) + FORTIFY_SHIELD;
+      u.shield = (u.shield || 0) + SHIELD_PER_FORTIFY;
       return allUnits;
     }
 
     if (action.type === "move") {
-      unit.row = action.to.row;
-      unit.col = action.to.col;
+      u.r = action.to.r; u.c = action.to.c;
       return allUnits;
     }
 
     if (action.type === "attack") {
-      const target = allUnits.find((u) => u.id === action.targetId);
-      if (!target) return allUnits;
+      const t = allUnits.find((x) => x.id === action.targetId);
+      if (!t) return allUnits;
 
-      if (target.shield && target.shield > 0) {
-        target.shield -= 1;
+      if (t.shield && t.shield > 0) {
+        t.shield -= 1;
         return allUnits;
       }
 
-      target.hp -= 1;
-      if (target.hp <= 0) {
-        return allUnits.filter((u) => u.id !== target.id);
-      }
+      t.hp -= 1;
+      if (t.hp <= 0) return allUnits.filter((x) => x.id !== t.id);
       return allUnits;
     }
 
     return allUnits;
   };
 
-  const bannerActionsLeft = () => {
-    if (!matchActive) return;
-    if (activeSide === "player") {
-      setBanner(`Your turn — ${actionsLeft} action(s) left.`, null);
-    } else {
-      setBanner("Bot is calculating a response...", null);
+  const scoreEndOfTurnBeacons = () => {
+    // occupied beacons score
+    for (const b of BEACONS) {
+      const occ = unitAt(b.r, b.c);
+      if (!occ) continue;
+      if (occ.side === "player") playerBeaconScore += 1;
+      else botBeaconScore += 1;
     }
   };
 
-  const handleTileClick = (row, col) => {
+  const checkWinner = () => {
+    const pUnits = units.filter((u) => u.side === "player");
+    const bUnits = units.filter((u) => u.side === "bot");
+
+    if (playerBeaconScore >= WIN_BEACONS || bUnits.length === 0) return "player";
+    if (botBeaconScore >= WIN_BEACONS || pUnits.length === 0) return "bot";
+
+    if (turn > MAX_TURNS) {
+      if (playerBeaconScore !== botBeaconScore) return playerBeaconScore > botBeaconScore ? "player" : "bot";
+      // tiebreaker: total health+shield
+      const pPow = pUnits.reduce((s, u) => s + u.hp + (u.shield || 0) * 0.6, 0);
+      const bPow = bUnits.reduce((s, u) => s + u.hp + (u.shield || 0) * 0.6, 0);
+      return pPow >= bPow ? "player" : "bot";
+    }
+
+    return null;
+  };
+
+  // ---------- rendering ----------
+  const render = () => {
+    el.board.innerHTML = "";
+
+    const rec = director.recommend();
+    const showHighlights = rec.showHighlights;
+    const showAttackHints = rec.showAttackHints;
+
+    for (let r = 0; r < SIZE; r += 1) {
+      for (let c = 0; c < SIZE; c += 1) {
+        const tile = document.createElement("button");
+        tile.type = "button";
+        tile.className = "grid-tile";
+        tile.dataset.r = String(r);
+        tile.dataset.c = String(c);
+
+        if (isBeacon(r, c)) tile.classList.add("beacon");
+
+        const occ = unitAt(r, c);
+        if (occ) {
+          const wrap = document.createElement("div");
+          wrap.className = `unit ${occ.side}`;
+
+          const label = document.createElement("div");
+          label.className = "unit-label";
+          label.textContent = occ.label;
+
+          const hp = document.createElement("div");
+          hp.className = "unit-hp";
+          for (let i = 0; i < occ.hp; i += 1) {
+            const dot = document.createElement("span");
+            dot.className = "hp-dot";
+            hp.appendChild(dot);
+          }
+          for (let i = 0; i < (occ.shield || 0); i += 1) {
+            const dot = document.createElement("span");
+            dot.className = "shield-dot";
+            hp.appendChild(dot);
+          }
+
+          wrap.appendChild(label);
+          wrap.appendChild(hp);
+          tile.appendChild(wrap);
+
+          if (isBeacon(r, c)) {
+            tile.classList.add(occ.side === "player" ? "held-player" : "held-bot");
+          }
+        }
+
+        tile.addEventListener("click", () => onTileClick(r, c, showHighlights, showAttackHints));
+        el.board.appendChild(tile);
+      }
+    }
+
+    if (matchActive && activeSide === "player" && selectedUnitId && showHighlights) {
+      highlightSelected(showAttackHints);
+    }
+  };
+
+  const highlightSelected = (showAttackHints) => {
+    const u = units.find((x) => x.id === selectedUnitId);
+    if (!u) return;
+
+    const acts = actionsFor(u);
+    for (const a of acts) {
+      if (a.type === "fortify") continue;
+      const tile = el.board.querySelector(`[data-r="${a.to.r}"][data-c="${a.to.c}"]`);
+      if (!tile) continue;
+      if (a.type === "attack" && showAttackHints) tile.classList.add("attack");
+      else tile.classList.add("highlight");
+    }
+  };
+
+  // ---------- player interaction ----------
+  const startTurnTimer = () => {
+    turnStartMs = Date.now();
+    actionCountThisTurn = 0;
+    mistakesThisTurn = 0;
+  };
+
+  const commitTurnTelemetry = () => {
+    const turnMs = Date.now() - (turnStartMs || Date.now());
+    director.observeTurn({
+      turnMs,
+      actionsTaken: actionCountThisTurn,
+      mistakes: mistakesThisTurn,
+    });
+    updateDirectorStrip();
+    updateScoreHud();
+  };
+
+  const onTileClick = (r, c, showHighlights, showAttackHints) => {
     if (!matchActive || activeSide !== "player") return;
     if (actionsLeft <= 0) return;
 
-    const clickedUnit = getUnitAt(row, col);
+    const clicked = unitAt(r, c);
 
-    // Select your unit
-    if (clickedUnit && clickedUnit.side === "player") {
-      if (selectedUnitId === clickedUnit.id) {
-        // Clicking selected unit again => Fortify
-        const fortAction = { type: "fortify", unitId: clickedUnit.id, to: { row, col } };
-        units = applyActionToUnits(fortAction, units);
-        actionsLeft = Math.max(actionsLeft - 1, 0);
-
+    // selecting your unit
+    if (clicked && clicked.side === "player") {
+      if (selectedUnitId === clicked.id) {
+        // fortify
+        units = applyAction({ type: "fortify", unitId: clicked.id, to: { r, c } }, units);
+        actionsLeft -= 1;
+        actionCountThisTurn += 1;
         selectedUnitId = null;
-        lastPlayerAction = { type: "fortify", targetId: null, targetPosition: { row, col } };
 
-        renderBoard();
         updateMeta();
-        bannerActionsLeft();
+        render();
+        setBanner(`Your turn — ${actionsLeft} action(s) left.`, null);
 
-        const winner = checkWin();
-        if (winner) return resolveMatch(winner);
+        const winner = checkWinner();
+        if (winner) return finishMatch(winner);
 
-        endTurnBtn.disabled = false;
+        el.endTurnBtn.disabled = false;
         return;
       }
 
-      // normal select
-      selectedUnitId = clickedUnit.id;
+      selectedUnitId = clicked.id;
       updateMeta();
-      highlightTiles();
+      render();
       return;
     }
 
-    // Need a selected unit to act
-    if (!selectedUnitId) return;
+    if (!selectedUnitId) { mistakesThisTurn += 1; return; }
 
-    const selectedUnit = units.find((u) => u.id === selectedUnitId);
-    if (!selectedUnit) return;
+    const u = units.find((x) => x.id === selectedUnitId);
+    if (!u) { selectedUnitId = null; return; }
 
-    const actions = getValidActions(selectedUnit);
-    const chosen = actions.find((a) => a.type !== "fortify" && a.to.row === row && a.to.col === col);
-    if (!chosen) return;
+    const acts = actionsFor(u);
+    const chosen = acts.find((a) => a.type !== "fortify" && a.to.r === r && a.to.c === c);
+    if (!chosen) { mistakesThisTurn += 1; return; }
 
-    units = applyActionToUnits(chosen, units);
-    actionsLeft = Math.max(actionsLeft - 1, 0);
-
+    units = applyAction(chosen, units);
+    actionsLeft -= 1;
+    actionCountThisTurn += 1;
     selectedUnitId = null;
-    lastPlayerAction = {
-      type: chosen.type,
-      targetId: chosen.type === "attack" ? chosen.targetId : null,
-      targetPosition: chosen.to,
-    };
 
-    renderBoard();
     updateMeta();
+    render();
 
-    const winner = checkWin();
-    if (winner) return resolveMatch(winner);
+    const winner = checkWinner();
+    if (winner) return finishMatch(winner);
 
-    bannerActionsLeft();
-
-    // End Turn always allowed once match started
-    endTurnBtn.disabled = false;
+    setBanner(`Your turn — ${actionsLeft} action(s) left.`, null);
+    el.endTurnBtn.disabled = false;
   };
 
-  const evaluateState = (allUnits, pControl, bControl) => {
-    // Score from BOT perspective: higher is better for bot
-    const botUnits = allUnits.filter((u) => u.side === "bot");
-    const playerUnits = allUnits.filter((u) => u.side === "player");
+  // ---------- bot AI (adaptive, depth, randomness) ----------
+  const deepCloneUnits = (arr) => arr.map((u) => ({ ...u }));
 
-    const botPower = botUnits.reduce((s, u) => s + u.hp + (u.shield || 0) * 0.6 + (u.type === "sniper" ? 0.35 : 0), 0);
-    const playerPower = playerUnits.reduce((s, u) => s + u.hp + (u.shield || 0) * 0.6 + (u.type === "sniper" ? 0.35 : 0), 0);
+  const evalState = (allUnits, pB, bB) => {
+    // bot-centric score (higher is better for bot)
+    const p = allUnits.filter((u) => u.side === "player");
+    const b = allUnits.filter((u) => u.side === "bot");
 
-    const controlDiff = (bControl - pControl) * 1.6;
-    const powerDiff = (botPower - playerPower) * 1.35;
+    const pow = (u) => u.hp + (u.shield || 0) * 0.6 + (u.type === "sniper" ? 0.35 : 0);
+    const pPow = p.reduce((s, u) => s + pow(u), 0);
+    const bPow = b.reduce((s, u) => s + pow(u), 0);
 
-    // Node occupancy bonus
-    const nodeDiff = CONTROL_NODES.reduce((acc, n) => {
-      const occ = allUnits.find((u) => u.row === n.row && u.col === n.col);
-      if (!occ) return acc;
-      if (occ.side === "bot") return acc + 0.55;
-      return acc - 0.55;
-    }, 0);
+    const beaconDiff = (bB - pB) * 2.2;
+    const powerDiff = (bPow - pPow) * 1.35;
 
-    // Positional: distance to nodes
-    const distToNodes = (unit) => CONTROL_NODES.reduce((best, n) => {
-      const d = Math.abs(unit.row - n.row) + Math.abs(unit.col - n.col);
-      return Math.min(best, d);
-    }, 99);
+    // beacon occupancy bonus
+    let occ = 0;
+    for (const be of BEACONS) {
+      const o = allUnits.find((u) => u.r === be.r && u.c === be.c);
+      if (!o) continue;
+      occ += (o.side === "bot") ? 0.55 : -0.55;
+    }
 
-    const botPos = botUnits.reduce((s, u) => s + (6 - distToNodes(u)) * 0.08, 0);
-    const playerPos = playerUnits.reduce((s, u) => s + (6 - distToNodes(u)) * 0.08, 0);
+    // position toward beacons
+    const distToBeacon = (u) => {
+      let best = 999;
+      for (const be of BEACONS) {
+        const d = Math.abs(u.r - be.r) + Math.abs(u.c - be.c);
+        best = Math.min(best, d);
+      }
+      return best;
+    };
+    const bPos = b.reduce((s, u) => s + (7 - distToBeacon(u)) * 0.10, 0);
+    const pPos = p.reduce((s, u) => s + (7 - distToBeacon(u)) * 0.10, 0);
 
-    const posDiff = (botPos - playerPos) * 1.0;
-
-    return controlDiff + powerDiff + nodeDiff + posDiff;
+    return beaconDiff + powerDiff + occ + (bPos - pPos);
   };
 
-  const enumerateActionsForSide = (side, allUnits) => {
-    return allUnits
-      .filter((u) => u.side === side)
-      .flatMap((u) => getValidActions(u, allUnits));
+  const actionsForSide = (side, allUnits) =>
+    allUnits.filter((u) => u.side === side).flatMap((u) => actionsFor(u, allUnits));
+
+  const simulate = (action, allUnits) => {
+    const clone = deepCloneUnits(allUnits);
+    return applyAction(action, clone);
   };
 
-  const simulateAction = (action, allUnits) => {
-    const cloned = allUnits.map((u) => ({ ...u }));
-    const nextUnits = applyActionToUnits(action, cloned);
-    return nextUnits;
-  };
-
-  const scoreImmediateAction = (action, allUnits, aggression, pressure) => {
-    const unit = allUnits.find((u) => u.id === action.unitId);
-    if (!unit) return 0;
-
+  const immediateHeuristic = (action, allUnits) => {
     let score = 0;
+    const u = allUnits.find((x) => x.id === action.unitId);
+    if (!u) return 0;
 
     if (action.type === "fortify") {
-      // Fortify is better when threatened
-      const threatened = enumerateActionsForSide(unit.side === "bot" ? "player" : "bot", allUnits)
-        .some((a) => a.type === "attack" && a.targetId === unit.id);
-      score += threatened ? 2.2 + pressure * 1.4 : 0.6;
-      return score;
+      // good if threatened
+      const threats = actionsForSide(u.side === "bot" ? "player" : "bot", allUnits)
+        .some((a) => a.type === "attack" && a.targetId === u.id);
+      return threats ? 2.2 : 0.6;
     }
 
     if (action.type === "attack") {
-      const target = allUnits.find((u) => u.id === action.targetId);
-      if (!target) return 0;
-
-      score += 3.2 + aggression * 3.5;
-
-      // If target would die (no shield and hp==1)
-      const effectiveHp = target.hp + (target.shield || 0);
-      if (effectiveHp <= 1) score += 4.0;
-
-      // Hitting units on nodes is juicy
-      if (isControlNode(target.row, target.col)) score += 2.0 + pressure * 1.5;
-
-      // Sniper shot bonus (safer)
-      if (action.ranged) score += 0.9;
-
+      score += action.ranged ? 3.2 : 3.0;
+      const t = allUnits.find((x) => x.id === action.targetId);
+      if (t) {
+        const eff = t.hp + (t.shield || 0);
+        if (eff <= 1) score += 3.8;
+        if (isBeacon(t.r, t.c)) score += 2.0;
+      }
       return score;
     }
 
     if (action.type === "move") {
-      // Prefer stepping onto nodes
-      if (isControlNode(action.to.row, action.to.col)) {
-        score += 3.5 + pressure * 2.2;
-      } else {
-        // Slightly prefer moving closer to nearest node
-        const dist = CONTROL_NODES.reduce((best, n) => {
-          const d = Math.abs(action.to.row - n.row) + Math.abs(action.to.col - n.col);
-          return Math.min(best, d);
-        }, 99);
-        score += (6 - dist) * 0.22 + pressure * 0.35;
-      }
-
-      // Avoid moving into immediate attack range (roughly)
-      const hypothetical = simulateAction(action, allUnits);
-      const unitAfter = hypothetical.find((u) => u.id === action.unitId);
-      const enemySide = unit.side === "bot" ? "player" : "bot";
-
-      const danger = enumerateActionsForSide(enemySide, hypothetical)
-        .some((a) => a.type === "attack" && a.targetId === unitAfter?.id);
-
-      if (danger) score -= 1.2 - (pressure * 0.4);
-
+      if (isBeacon(action.to.r, action.to.c)) score += 3.2;
+      else score += 0.7;
       return score;
     }
 
     return score;
   };
 
-  const pickBotAction = (allUnits, pControl, bControl, director) => {
-    const botActions = enumerateActionsForSide("bot", allUnits);
-    if (botActions.length === 0) return null;
+  const pickBotAction = (allUnits, pB, bB, rec) => {
+    const acts = actionsForSide("bot", allUnits);
+    if (!acts.length) return null;
 
-    const depth = director.depth;
-    const gamma = 0.7;
+    const depth = rec.depth;
+    const randomness = rec.randomness;
+    const gamma = 0.75;
 
-    // Evaluate each action with optional lookahead
-    const scored = botActions.map((a) => {
-      const immediate = scoreImmediateAction(a, allUnits, director.aggression, director.pressure);
+    const scored = acts.map((a) => {
+      const imm = immediateHeuristic(a, allUnits);
 
-      let future = 0;
+      let future;
+      const afterBot = simulate(a, allUnits);
+
       if (depth >= 2) {
-        const afterBot = simulateAction(a, allUnits);
-
-        // Player best reply (one action approximation)
-        const playerActions = enumerateActionsForSide("player", afterBot);
-        if (playerActions.length > 0) {
-          let bestPlayer = -Infinity;
-          playerActions.forEach((pa) => {
-            const afterPlayer = simulateAction(pa, afterBot);
-            const s = evaluateState(afterPlayer, pControl, bControl);
-            // player wants LOW bot score
-            if (s < bestPlayer) bestPlayer = s;
-          });
-
-          // Since evaluateState is bot-centric, the player's best reply minimizes it.
-          // Convert that into a future estimate from bot perspective:
-          future = evaluateState(afterBot, pControl, bControl) - (bestPlayer === -Infinity ? 0 : (bestPlayer - evaluateState(afterBot, pControl, bControl)));
-          // Simplify: just use state after bot, but penalize if player can heavily reduce it.
-          const afterBotScore = evaluateState(afterBot, pControl, bControl);
-          future = afterBotScore - Math.max(0, afterBotScore - bestPlayer);
+        const replies = actionsForSide("player", afterBot);
+        if (replies.length) {
+          // player chooses reply that minimizes bot eval
+          let bestMin = Infinity;
+          for (const ra of replies) {
+            const afterP = simulate(ra, afterBot);
+            const s = evalState(afterP, pB, bB);
+            bestMin = Math.min(bestMin, s);
+          }
+          const botAfter = evalState(afterBot, pB, bB);
+          future = botAfter - Math.max(0, botAfter - bestMin);
         } else {
-          future = evaluateState(afterBot, pControl, bControl);
+          future = evalState(afterBot, pB, bB);
         }
       } else {
-        const afterBot = simulateAction(a, allUnits);
-        future = evaluateState(afterBot, pControl, bControl);
+        future = evalState(afterBot, pB, bB);
       }
 
-      const total = immediate + future * gamma;
-      return { action: a, score: total };
+      return { action: a, score: imm + gamma * future };
     });
 
     scored.sort((x, y) => y.score - x.score);
 
-    // Adaptive randomness: sample among top-k within a margin
+    // adaptive randomness: sample among top window
     const best = scored[0].score;
-    const margin = Utils.clamp(0.8 + director.randomness * 1.4, 0.7, 1.8);
-    const candidates = scored.filter((s) => s.score >= best - margin);
+    const margin = clamp(0.8 + randomness * 1.6, 0.7, 2.0);
+    const pool = scored.filter((x) => x.score >= best - margin);
+    const maxPick = Math.max(2, Math.round(2 + randomness * 6));
+    const slice = pool.slice(0, Math.min(maxPick, pool.length));
 
-    // More randomness => larger candidate set
-    const maxPick = Math.max(2, Math.round(2 + director.randomness * 5));
-    const pool = candidates.slice(0, Math.min(maxPick, candidates.length));
-
-    return Utils.shuffle(pool)[0].action;
+    // shuffle
+    for (let i = slice.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [slice[i], slice[j]] = [slice[j], slice[i]];
+    }
+    return slice[0].action;
   };
 
-  const botTurn = () => {
+  const botActSequence = () => {
     if (!matchActive || activeSide !== "bot") return;
 
-    const director = calculateAdaptiveChallenge(state);
+    const rec = director.recommend();
+    const pacing = rec.pacingMs;
 
-    let botActionsLeft = ACTIONS_PER_TURN;
+    let botActsLeft = ACTIONS_PER_TURN;
 
     const actOnce = () => {
-      if (!matchActive || activeSide !== "bot") return;
+      const chosen = pickBotAction(units, playerBeaconScore, botBeaconScore, rec);
+      if (!chosen) { botActsLeft = 0; return; }
+      units = applyAction(chosen, units);
+      botActsLeft -= 1;
+      render();
 
-      const possible = enumerateActionsForSide("bot", units);
-      if (possible.length === 0) {
-        botActionsLeft = 0;
-        return;
-      }
-
-      const chosen = pickBotAction(units, playerControl, botControl, director);
-      if (!chosen) {
-        botActionsLeft = 0;
-        return;
-      }
-
-      units = applyActionToUnits(chosen, units);
-      renderBoard();
-
-      const winnerNow = checkWin();
-      if (winnerNow) {
-        resolveMatch(winnerNow);
-        botActionsLeft = 0;
-        return;
-      }
-
-      botActionsLeft -= 1;
-    };
-
-    // Bot performs up to 2 actions, with a little pacing
-    const doBotSequence = () => {
-      if (!matchActive || activeSide !== "bot") return;
-
-      actOnce();
-      if (!matchActive) return;
-
-      if (botActionsLeft > 0) {
-        botTimeout = setTimeout(() => {
-          actOnce();
-          finishBotTurn();
-        }, Math.max(320, BOT_DELAY * 0.6));
-      } else {
-        finishBotTurn();
+      const winner = checkWinner();
+      if (winner) {
+        botActsLeft = 0;
+        finishMatch(winner);
       }
     };
 
     const finishBotTurn = () => {
       if (!matchActive) return;
 
-      botControl += countControl("bot");
+      // bot scores beacons at end of its turn
+      scoreEndOfTurnBeacons();
 
-      const winner = checkWin();
-      if (winner) {
-        renderBoard();
-        resolveMatch(winner);
-        return;
-      }
+      const winner = checkWinner();
+      if (winner) return finishMatch(winner);
 
       activeSide = "player";
-      turnCount += 1;
+      turn += 1;
       actionsLeft = ACTIONS_PER_TURN;
-
       selectedUnitId = null;
+
+      startTurnTimer();
       updateMeta();
-      renderBoard();
+      render();
 
       setBanner(`Your turn — ${actionsLeft} action(s) left.`, null);
-      endTurnBtn.disabled = false;
+      el.endTurnBtn.disabled = false;
     };
 
-    doBotSequence();
+    // pacing between bot actions
+    actOnce();
+    if (!matchActive) return;
+
+    if (botActsLeft > 0) {
+      botTimeout = setTimeout(() => {
+        actOnce();
+        finishBotTurn();
+      }, Math.max(280, pacing * 0.6));
+    } else {
+      finishBotTurn();
+    }
   };
 
-  const endTurn = () => {
+  // ---------- match lifecycle ----------
+  const deployUnits = () => {
+    // player: 2 troopers + 1 sniper
+    units = [
+      mkUnit("p1", "player", "trooper", 6, 1),
+      mkUnit("p2", "player", "trooper", 6, 3),
+      mkUnit("p3", "player", "sniper", 6, 5),
+
+      mkUnit("b1", "bot", "trooper", 0, 1),
+      mkUnit("b2", "bot", "trooper", 0, 3),
+      mkUnit("b3", "bot", "sniper", 0, 5),
+    ];
+  };
+
+  const startMatch = () => {
+    resetMatchState();
+    matchActive = true;
+
+    deployUnits();
+
+    activeSide = "player";
+    actionsLeft = ACTIONS_PER_TURN;
+    turn = 1;
+
+    startTurnTimer();
+    updateDirectorStrip();
+    updateScoreHud();
+    updateMeta();
+
+    render();
+
+    el.startMatchBtn.disabled = true;
+    el.endTurnBtn.disabled = false;
+
+    setBanner(`Your turn — ${actionsLeft} action(s) left.`, null);
+  };
+
+  const endPlayerTurn = () => {
     if (!matchActive || activeSide !== "player") return;
 
-    // Score node control at end of turn
-    playerControl += countControl("player");
+    // telemetry for player turn
+    commitTurnTelemetry();
 
-    const winner = checkWin();
-    if (winner) {
-      renderBoard();
-      resolveMatch(winner);
-      return;
-    }
+    // score beacons at end of player turn
+    scoreEndOfTurnBeacons();
+
+    const winner = checkWinner();
+    if (winner) return finishMatch(winner);
 
     activeSide = "bot";
     selectedUnitId = null;
 
     updateMeta();
-    renderBoard();
+    render();
+    setBanner("Bot is thinking…", null);
 
-    setBanner("Bot is calculating a response...", null);
-    endTurnBtn.disabled = true;
+    el.endTurnBtn.disabled = true;
 
-    botTimeout = setTimeout(() => {
-      botTurn();
-    }, BOT_DELAY);
+    // bot starts after pacing
+    const rec = director.recommend();
+    botTimeout = setTimeout(() => botActSequence(), Math.max(260, rec.pacingMs));
   };
 
-  const startMatch = () => {
-    matchActive = true;
-    activeSide = "player";
-    turnCount = 1;
+  const finishMatch = (winner) => {
+    matchActive = false;
+    clearBotTimeout();
 
-    playerControl = 0;
-    botControl = 0;
+    // close/comeback flags for director
+    const closeGame = Math.abs(playerBeaconScore - botBeaconScore) <= 1;
+    const comeback = false; // simple placeholder; can be computed with more tracking
 
-    selectedUnitId = null;
-    actionsLeft = ACTIONS_PER_TURN;
+    // update progress points with checkpoint floor
+    const pointsBefore = progress.points;
+    const prevLevel = getCheckpointInfo(progress.points).current;
 
-    lastPlayerAction = null;
+    const playerWon = winner === "player";
 
-    createUnits();
+    if (playerWon) {
+      progress.points += POINTS_PER_WIN;
+      progress.wins += 1;
+    } else {
+      const floor = getCheckpointFloor(progress.points);
+      progress.points = Math.max(progress.points + POINTS_PER_LOSS, floor);
+      progress.losses += 1;
+    }
+    progress.totalGames += 1;
 
-    setBanner(`Your turn — ${actionsLeft} action(s) left. Select a unit.`, null);
-    updateMeta();
-    renderBoard();
+    Storage.save(progress);
 
-    startMatchBtn.disabled = true;
-    endTurnBtn.disabled = false;
+    // director learns from match outcome
+    director.observeGame({
+      playerWon,
+      turns: turn,
+      closeGame,
+      comeback,
+      playerBeaconScore,
+      botBeaconScore,
+    });
+
+    updateScoreHud();
+    updateTrack(prevLevel);
+    updateDirectorStrip();
+
+    el.startMatchBtn.disabled = false;
+    el.endTurnBtn.disabled = true;
+
+    setBanner(
+      playerWon ? "Victory! Points locked into your checkpoint run." : "Defeat. Checkpoints hold your floor.",
+      playerWon ? "win" : "loss"
+    );
   };
 
-  // Buttons
-  playBtn.addEventListener("click", () => {
+  // ---------- wiring ----------
+  el.playBtn.addEventListener("click", () => {
     switchScreen("game");
-    startMatch();
-  });
-
-  backBtn.addEventListener("click", () => {
-    // Stop any ongoing match cleanly
-    matchActive = false;
-    activeSide = "player";
-    selectedUnitId = null;
-    actionsLeft = ACTIONS_PER_TURN;
-    startMatchBtn.disabled = false;
-    endTurnBtn.disabled = true;
-
-    if (botTimeout) {
-      clearTimeout(botTimeout);
-      botTimeout = null;
-    }
-
-    switchScreen("checkpoint");
-    setBanner("Deploy units to begin the skirmish.", null);
+    // don’t auto-start; let user hit Start Match for clarity
+    setBanner("Press Start Match to deploy.", null);
+    updateDirectorStrip();
     updateMeta();
-    renderBoard();
+    render();
   });
 
-  startMatchBtn.addEventListener("click", startMatch);
-  endTurnBtn.addEventListener("click", endTurn);
-
-  resetRunBtn.addEventListener("click", () => {
-    state = Storage.reset();
-    Storage.save(state);
-    updateScoreboard(state);
-    updateTrack(state);
-
+  el.backBtn.addEventListener("click", () => {
     matchActive = false;
-    activeSide = "player";
-    selectedUnitId = null;
-    actionsLeft = ACTIONS_PER_TURN;
-
-    startMatchBtn.disabled = false;
-    endTurnBtn.disabled = true;
-
-    setBanner("Progress reset. Start a new match when ready.", null);
-
-    if (botTimeout) {
-      clearTimeout(botTimeout);
-      botTimeout = null;
-    }
+    clearBotTimeout();
+    switchScreen("checkpoint");
+    setBanner("Press Start Match to deploy.", null);
   });
 
-  // Init UI
-  updateScoreboard(state);
-  updateTrack(state);
-  updateMeta();
-  renderBoard();
-};
+  el.startMatchBtn.addEventListener("click", startMatch);
+  el.endTurnBtn.addEventListener("click", endPlayerTurn);
 
-// Boot
-if (document.readyState === "loading") {
-  document.addEventListener("DOMContentLoaded", initApp, { once: true });
-} else {
-  initApp();
-}
+  el.resetRunBtn.addEventListener("click", () => {
+    progress = Storage.reset();
+    Storage.save(progress);
+    updateScoreHud();
+    updateTrack(null);
+    resetMatchState();
+    setBanner("Progress reset. Ready when you are.", null);
+  });
+
+  // initial
+  updateScoreHud();
+  updateTrack(null);
+  updateDirectorStrip();
+  updateMeta();
+  render();
+})();
