@@ -3,25 +3,26 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Quantum Queen Duel — Arena</title>
+  <title>Prism Relay — Puzzle Grid</title>
   <link rel="stylesheet" href="game.css" />
 </head>
 <body>
   <div class="game-root">
     <header class="game-header">
       <div class="brand">
-        <div class="brand-title">Quantum Queen Duel</div>
-        <div class="brand-subtitle">Wythoff-Nim arena match</div>
+        <div class="brand-title">Prism Relay</div>
+        <div class="brand-subtitle">Lights-out logic arena</div>
       </div>
       <div class="round-indicator">
-        <span id="roundLabel">Round 1</span>
+        <span id="puzzleLabel">Puzzle 1</span>
         <span class="dot"></span>
-        <span id="modeLabel">Match</span>
+        <span id="modeLabel">Challenge</span>
       </div>
       <div class="header-actions">
         <button class="icon-btn" id="soundBtn" title="Toggle sound">🔊</button>
         <button class="icon-btn" id="contrastBtn" title="Toggle contrast">◐</button>
-        <button class="icon-btn" id="resetBtn" title="Reset match">⟲</button>
+        <button class="icon-btn" id="newBtn" title="New puzzle">✦</button>
+        <button class="icon-btn" id="resetBtn" title="Reset puzzle">⟲</button>
       </div>
     </header>
 
@@ -30,52 +31,52 @@
         <div class="board-meta">
           <div>
             <div class="meta-label">Status</div>
-            <div class="meta-value" id="turnStatus">Your Turn</div>
+            <div class="meta-value" id="statusLabel">In Play</div>
           </div>
           <div>
-            <div class="meta-label">Last Move</div>
-            <div class="meta-value" id="lastMove">—</div>
+            <div class="meta-label">Moves</div>
+            <div class="meta-value" id="movesLabel">0</div>
           </div>
           <div>
-            <div class="meta-label">Board</div>
-            <div class="meta-value" id="boardSize">—</div>
+            <div class="meta-label">Time</div>
+            <div class="meta-value" id="timeLabel">0:00</div>
+          </div>
+          <div>
+            <div class="meta-label">Grid</div>
+            <div class="meta-value" id="gridLabel">5×5</div>
           </div>
         </div>
         <div class="board-wrap" id="boardWrap">
           <div class="board" id="board"></div>
-          <div class="token" id="token"></div>
-          <div class="move-preview" id="movePreview"></div>
         </div>
       </div>
 
       <aside class="hud">
         <div class="hud-card">
-          <div class="hud-label">Score</div>
-          <div class="hud-value"><span id="playerScore">0</span> : <span id="botScore">0</span></div>
+          <div class="hud-label">Par</div>
+          <div class="hud-value" id="parLabel">—</div>
         </div>
         <div class="hud-card">
-          <div class="hud-label">Round</div>
-          <div class="hud-value" id="roundCount">1 / 5</div>
+          <div class="hud-label">Best Streak</div>
+          <div class="hud-value" id="streakLabel">0</div>
         </div>
         <div class="hud-card">
-          <div class="hud-label">Director</div>
-          <div class="hud-value" id="directorNote">Calibrating</div>
+          <div class="hud-label">Tip</div>
+          <p class="hud-tip" id="tipLabel">Flip edges first to reduce noise in the center.</p>
         </div>
-        <button class="hud-btn" id="undoBtn">Undo (Practice)</button>
-        <div class="hud-tip" id="insightTip"></div>
+        <button class="hud-btn" id="hintBtn">Highlight neighbors</button>
       </aside>
     </main>
 
     <div class="overlay" id="overlay">
       <div class="overlay-card">
-        <h2 id="overlayTitle">Round Complete</h2>
-        <p id="overlayText">Bot wins the round.</p>
-        <button class="btn primary" id="continueBtn">Continue</button>
+        <h2 id="overlayTitle">Puzzle Solved</h2>
+        <p id="overlayText">You cleared the grid.</p>
+        <button class="btn primary" id="continueBtn">Next Puzzle</button>
       </div>
     </div>
   </div>
 
-  <script src="bot.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

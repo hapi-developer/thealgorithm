@@ -49,5 +49,5 @@ function goTo(mode) {
   window.location.href = `game.html?mode=${mode}`;
 }
 
-document.getElementById("playMatch").addEventListener("click", () => goTo("match"));
-document.getElementById("playPractice").addEventListener("click", () => goTo("practice"));
+document.getElementById("playChallenge").addEventListener("click", () => goTo("challenge"));
+document.getElementById("playZen").addEventListener("click", () => goTo("zen"));
