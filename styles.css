@@ -1,12 +1,12 @@
 :root {
   color-scheme: dark;
-  --bg: #0b0f1a;
+  --bg: #0a0f1c;
   --panel: rgba(255, 255, 255, 0.06);
   --panel-strong: rgba(255, 255, 255, 0.12);
   --text: rgba(255, 255, 255, 0.92);
   --muted: rgba(255, 255, 255, 0.6);
-  --accent: #7aa7ff;
-  --accent-strong: #9b7bff;
+  --accent: #7ef7ff;
+  --accent-strong: #b08cff;
   --border: rgba(255, 255, 255, 0.18);
   --radius: 18px;
 }
@@ -22,8 +22,8 @@ html, body {
 body {
   margin: 0;
   font-family: "Inter", system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-  background: radial-gradient(900px 540px at 8% 12%, rgba(122, 167, 255, 0.18), transparent),
-              radial-gradient(900px 540px at 90% 20%, rgba(155, 123, 255, 0.18), transparent),
+  background: radial-gradient(900px 540px at 10% 12%, rgba(126, 247, 255, 0.18), transparent),
+              radial-gradient(900px 540px at 90% 20%, rgba(176, 140, 255, 0.18), transparent),
               var(--bg);
   color: var(--text);
 }
@@ -32,8 +32,8 @@ body.high-contrast {
   --panel: rgba(255, 255, 255, 0.12);
   --panel-strong: rgba(255, 255, 255, 0.2);
   --border: rgba(255, 255, 255, 0.32);
-  --accent: #9ed0ff;
-  --accent-strong: #d6b4ff;
+  --accent: #9efbff;
+  --accent-strong: #d3b3ff;
 }
 
 .landing {
@@ -125,7 +125,7 @@ h1 {
 }
 
 .btn.primary {
-  background: linear-gradient(120deg, rgba(122, 167, 255, 0.32), rgba(155, 123, 255, 0.32));
+  background: linear-gradient(120deg, rgba(126, 247, 255, 0.32), rgba(176, 140, 255, 0.32));
   border-color: rgba(255, 255, 255, 0.3);
 }
 

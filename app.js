@@ -1,65 +1,49 @@
 const SETTINGS_KEY = "qqd-settings";
+const STREAK_KEY = "prism-streak";
 
 const elements = {
   board: document.getElementById("board"),
-  boardWrap: document.getElementById("boardWrap"),
-  token: document.getElementById("token"),
-  movePreview: document.getElementById("movePreview"),
-  turnStatus: document.getElementById("turnStatus"),
-  lastMove: document.getElementById("lastMove"),
-  boardSize: document.getElementById("boardSize"),
-  roundLabel: document.getElementById("roundLabel"),
-  roundCount: document.getElementById("roundCount"),
-  playerScore: document.getElementById("playerScore"),
-  botScore: document.getElementById("botScore"),
-  directorNote: document.getElementById("directorNote"),
+  statusLabel: document.getElementById("statusLabel"),
+  movesLabel: document.getElementById("movesLabel"),
+  timeLabel: document.getElementById("timeLabel"),
+  gridLabel: document.getElementById("gridLabel"),
+  puzzleLabel: document.getElementById("puzzleLabel"),
+  modeLabel: document.getElementById("modeLabel"),
+  parLabel: document.getElementById("parLabel"),
+  streakLabel: document.getElementById("streakLabel"),
+  tipLabel: document.getElementById("tipLabel"),
   overlay: document.getElementById("overlay"),
   overlayTitle: document.getElementById("overlayTitle"),
   overlayText: document.getElementById("overlayText"),
   continueBtn: document.getElementById("continueBtn"),
-  undoBtn: document.getElementById("undoBtn"),
-  insightTip: document.getElementById("insightTip"),
+  hintBtn: document.getElementById("hintBtn"),
   soundBtn: document.getElementById("soundBtn"),
   contrastBtn: document.getElementById("contrastBtn"),
+  newBtn: document.getElementById("newBtn"),
   resetBtn: document.getElementById("resetBtn"),
-  modeLabel: document.getElementById("modeLabel"),
 };
 
 const params = new URLSearchParams(window.location.search);
-const mode = params.get("mode") === "practice" ? "practice" : "match";
+const mode = params.get("mode") === "zen" ? "zen" : "challenge";
 
 const settings = loadSettings();
 applySettings(settings);
 
-BotEngine.initBot({
-  minN: 8,
-  maxN: 20,
-  defaultN: 12,
-  thinkTimeRange: [250, 900],
-});
-
-const gameState = {
-  phase: "bot_turn",
-  N: 10,
-  pos: { x: 0, y: 0 },
-  roundIndex: 1,
-  score: { player: 0, bot: 0 },
-  botGoesFirst: true,
-  grundyData: BotEngine.buildGrundy(10),
-  playerModel: { skill: 0.5 },
-  directorState: { skill: 0.5 },
-  ui: {
-    selected: true,
-    legalMoves: new Set(),
-    lastMoveText: "—",
-    misclicks: 0,
-    turnStart: Date.now(),
-  },
-  history: [],
-};
-
 const audio = {
   context: null,
+};
+
+const gameState = {
+  gridSize: 5,
+  grid: [],
+  moves: 0,
+  par: 0,
+  puzzleIndex: 1,
+  startTime: Date.now(),
+  timerId: null,
+  solved: false,
+  hintActive: false,
+  streak: Number(localStorage.getItem(STREAK_KEY) || 0),
 };
 
 function loadSettings() {
@@ -88,48 +72,69 @@ function playTone(freq, duration = 0.08) {
   const osc = ctx.createOscillator();
   const gain = ctx.createGain();
   osc.frequency.value = freq;
-  gain.gain.value = 0.04;
+  gain.gain.value = 0.05;
   osc.connect(gain);
   gain.connect(ctx.destination);
   osc.start();
   osc.stop(ctx.currentTime + duration);
 }
 
-function startRound() {
-  const round = BotEngine.chooseStartState(gameState.directorState);
-  gameState.N = round.N;
-  gameState.pos = { x: round.startX, y: round.startY };
-  gameState.botGoesFirst = round.botGoesFirst;
-  gameState.grundyData = round.grundyData;
-  gameState.phase = round.botGoesFirst ? "bot_turn" : "player_turn";
-  gameState.ui.turnStart = Date.now();
-  gameState.ui.misclicks = 0;
-  gameState.history = [];
+function setGridSize() {
+  if (mode === "zen") {
+    gameState.gridSize = 4;
+    return;
+  }
+  const step = Math.floor((gameState.puzzleIndex - 1) / 2);
+  gameState.gridSize = Math.min(7, 5 + step);
+}
 
-  buildBoard();
-  updateLegalMoves();
-  updateHud();
-  positionToken(false);
+function createEmptyGrid() {
+  const total = gameState.gridSize * gameState.gridSize;
+  gameState.grid = Array.from({ length: total }, () => false);
+}
 
-  if (gameState.phase === "bot_turn") {
-    setTimeout(runBotTurn, 150);
+function getIndex(row, col) {
+  return row * gameState.gridSize + col;
+}
+
+function toggleCell(row, col) {
+  if (row < 0 || col < 0 || row >= gameState.gridSize || col >= gameState.gridSize) return;
+  const idx = getIndex(row, col);
+  gameState.grid[idx] = !gameState.grid[idx];
+}
+
+function applyMove(row, col) {
+  toggleCell(row, col);
+  toggleCell(row - 1, col);
+  toggleCell(row + 1, col);
+  toggleCell(row, col - 1);
+  toggleCell(row, col + 1);
+}
+
+function shuffleGrid() {
+  const shuffleCount = gameState.gridSize * gameState.gridSize;
+  for (let i = 0; i < shuffleCount; i += 1) {
+    const row = Math.floor(Math.random() * gameState.gridSize);
+    const col = Math.floor(Math.random() * gameState.gridSize);
+    applyMove(row, col);
+  }
+  if (gameState.grid.every((cell) => !cell)) {
+    applyMove(0, 0);
   }
 }
 
 function buildBoard() {
-  const { N } = gameState;
   elements.board.innerHTML = "";
-  elements.board.style.gridTemplateColumns = `repeat(${N + 1}, 1fr)`;
-  elements.board.style.gridTemplateRows = `repeat(${N + 1}, 1fr)`;
+  elements.board.style.gridTemplateColumns = `repeat(${gameState.gridSize}, 1fr)`;
+  elements.board.style.gridTemplateRows = `repeat(${gameState.gridSize}, 1fr)`;
 
-  for (let y = N; y >= 0; y -= 1) {
-    for (let x = 0; x <= N; x += 1) {
+  for (let row = 0; row < gameState.gridSize; row += 1) {
+    for (let col = 0; col < gameState.gridSize; col += 1) {
       const cell = document.createElement("button");
       cell.className = "cell";
-      cell.dataset.x = x;
-      cell.dataset.y = y;
-      if (x === 0 && y === 0) cell.classList.add("origin");
-      cell.textContent = x === 0 && y === 0 ? "(0,0)" : "";
+      cell.dataset.row = row;
+      cell.dataset.col = col;
+      cell.setAttribute("aria-pressed", "false");
       cell.addEventListener("click", onCellClick);
       cell.addEventListener("mouseenter", onCellEnter);
       cell.addEventListener("mouseleave", onCellLeave);
@@ -138,264 +143,157 @@ function buildBoard() {
   }
 }
 
-function updateLegalMoves() {
-  gameState.ui.legalMoves.clear();
-  const { x, y } = gameState.pos;
-
-  const moves = [];
-  for (let k = 1; k <= x; k += 1) moves.push({ toX: x - k, toY: y });
-  for (let k = 1; k <= y; k += 1) moves.push({ toX: x, toY: y - k });
-  const diag = Math.min(x, y);
-  for (let k = 1; k <= diag; k += 1) moves.push({ toX: x - k, toY: y - k });
-
-  moves.forEach((move) => {
-    gameState.ui.legalMoves.add(`${move.toX},${move.toY}`);
+function updateBoard() {
+  const cells = elements.board.children;
+  gameState.grid.forEach((value, idx) => {
+    const cell = cells[idx];
+    cell.classList.toggle("on", value);
+    cell.setAttribute("aria-pressed", value ? "true" : "false");
   });
-
-  for (const cell of elements.board.children) {
-    const key = `${cell.dataset.x},${cell.dataset.y}`;
-    cell.classList.toggle("legal", gameState.phase === "player_turn" && gameState.ui.legalMoves.has(key));
-  }
-
-  elements.insightTip.textContent = "";
-  if (mode === "practice" && gameState.phase === "player_turn") {
-    elements.insightTip.textContent = "Practice: Undo enabled. Cold positions highlight after your move.";
-  }
 }
 
 function updateHud() {
-  elements.lastMove.textContent = gameState.ui.lastMoveText;
-  elements.roundLabel.textContent = `Round ${gameState.roundIndex}`;
-  elements.roundCount.textContent = mode === "match" ? `${gameState.roundIndex} / 5` : `Practice`;
-  elements.playerScore.textContent = gameState.score.player;
-  elements.botScore.textContent = gameState.score.bot;
-  elements.boardSize.textContent = `${gameState.N}×${gameState.N}`;
-  elements.turnStatus.textContent = gameState.phase === "player_turn" ? "Your Turn" : gameState.phase === "bot_turn" ? "Bot Thinking…" : "Round Over";
-  elements.modeLabel.textContent = mode === "practice" ? "Practice" : "Match";
-  elements.undoBtn.disabled = mode !== "practice" || gameState.history.length === 0 || gameState.phase !== "player_turn";
-  updateDirectorNote();
+  elements.movesLabel.textContent = gameState.moves.toString();
+  elements.gridLabel.textContent = `${gameState.gridSize}×${gameState.gridSize}`;
+  elements.puzzleLabel.textContent = `Puzzle ${gameState.puzzleIndex}`;
+  elements.modeLabel.textContent = mode === "zen" ? "Zen" : "Challenge";
+  elements.parLabel.textContent = gameState.par ? `${gameState.par} moves` : "—";
+  elements.streakLabel.textContent = gameState.streak.toString();
+  elements.statusLabel.textContent = gameState.solved ? "Solved" : "In Play";
+  elements.hintBtn.classList.toggle("active", gameState.hintActive);
+  elements.hintBtn.textContent = gameState.hintActive ? "Hide neighbors" : "Highlight neighbors";
 }
 
-function updateDirectorNote() {
-  const skill = gameState.directorState.skill ?? 0.5;
-  if (skill < 0.35) {
-    elements.directorNote.textContent = "Training + strong hints";
-  } else if (skill < 0.7) {
-    elements.directorNote.textContent = "Balanced duel";
-  } else {
-    elements.directorNote.textContent = "High-stakes mind game";
-  }
-
-  const hintIntensity = skill < 0.35 ? 0.26 : skill < 0.7 ? 0.18 : 0.1;
-  document.documentElement.style.setProperty("--hint-alpha", hintIntensity.toString());
+function updateTimer() {
+  const elapsed = Math.floor((Date.now() - gameState.startTime) / 1000);
+  const minutes = Math.floor(elapsed / 60);
+  const seconds = (elapsed % 60).toString().padStart(2, "0");
+  elements.timeLabel.textContent = `${minutes}:${seconds}`;
 }
 
-function positionToken(animate, isBot = false) {
-  const rect = elements.board.getBoundingClientRect();
-  const wrapRect = elements.boardWrap.getBoundingClientRect();
-  const cellSize = rect.width / (gameState.N + 1);
-  const x = gameState.pos.x;
-  const y = gameState.pos.y;
-  const left = rect.left + x * cellSize;
-  const top = rect.top + (gameState.N - y) * cellSize;
+function startTimer() {
+  clearInterval(gameState.timerId);
+  gameState.startTime = Date.now();
+  updateTimer();
+  gameState.timerId = setInterval(updateTimer, 1000);
+}
 
-  const tokenSize = cellSize * 0.7;
-  elements.token.style.width = `${tokenSize}px`;
-  elements.token.style.height = `${tokenSize}px`;
-  elements.token.classList.toggle("bot", isBot);
+function setTip() {
+  const tips = [
+    "Corners only affect three tiles—try them early.",
+    "Work from the edges toward the center.",
+    "Look for symmetric patterns to reduce guesses.",
+    "Try to keep the board balanced before big flips.",
+  ];
+  elements.tipLabel.textContent = tips[Math.floor(Math.random() * tips.length)];
+}
 
-  const offsetX = left + cellSize / 2 - tokenSize / 2 - wrapRect.left;
-  const offsetY = top + cellSize / 2 - tokenSize / 2 - wrapRect.top;
+function setupPuzzle({ incrementIndex = false } = {}) {
+  if (incrementIndex) gameState.puzzleIndex += 1;
+  gameState.moves = 0;
+  gameState.solved = false;
+  gameState.hintActive = false;
+  setGridSize();
+  createEmptyGrid();
+  shuffleGrid();
+  buildBoard();
+  updateBoard();
+  gameState.par = Math.round(gameState.gridSize * gameState.gridSize * 0.6);
+  setTip();
+  updateHud();
+  startTimer();
+  hideOverlay();
+}
 
-  if (!animate) {
-    elements.token.style.transition = settings.reducedMotion ? "none" : "transform 320ms ease";
+function toggleHints(active) {
+  gameState.hintActive = active;
+  updateHud();
+}
+
+function showOverlay() {
+  elements.overlay.classList.add("visible");
+  const timeText = elements.timeLabel.textContent;
+  const parText = gameState.par ? `Par ${gameState.par}` : "";
+  elements.overlayTitle.textContent = "Puzzle Solved";
+  elements.overlayText.textContent = `Solved in ${gameState.moves} moves · ${timeText} · ${parText}`.trim();
+}
+
+function hideOverlay() {
+  elements.overlay.classList.remove("visible");
+}
+
+function handleSolve() {
+  gameState.solved = true;
+  clearInterval(gameState.timerId);
+  const parBeat = gameState.moves <= gameState.par;
+  if (mode === "challenge" && parBeat) {
+    gameState.streak += 1;
+  } else if (mode === "challenge") {
+    gameState.streak = 0;
   }
-
-  elements.token.style.transform = `translate(${offsetX}px, ${offsetY}px)`;
+  localStorage.setItem(STREAK_KEY, gameState.streak.toString());
+  updateHud();
+  playTone(720, 0.2);
+  showOverlay();
 }
 
 function onCellClick(event) {
-  if (gameState.phase !== "player_turn") return;
-  const target = event.currentTarget;
-  const toX = Number(target.dataset.x);
-  const toY = Number(target.dataset.y);
-  const key = `${toX},${toY}`;
-
-  if (!gameState.ui.legalMoves.has(key)) {
-    target.classList.add("illegal");
-    setTimeout(() => target.classList.remove("illegal"), 250);
-    gameState.ui.misclicks += 1;
-    playTone(220, 0.08);
-    return;
+  if (gameState.solved) return;
+  const row = Number(event.currentTarget.dataset.row);
+  const col = Number(event.currentTarget.dataset.col);
+  applyMove(row, col);
+  gameState.moves += 1;
+  playTone(420, 0.05);
+  updateBoard();
+  updateHud();
+  if (gameState.grid.every((cell) => !cell)) {
+    handleSolve();
   }
-
-  commitMove("player", toX, toY);
 }
 
 function onCellEnter(event) {
-  const target = event.currentTarget;
-  const key = `${target.dataset.x},${target.dataset.y}`;
-  if (!gameState.ui.legalMoves.has(key)) return;
-  const toX = Number(target.dataset.x);
-  const toY = Number(target.dataset.y);
-  showMovePreview(toX, toY);
+  if (!gameState.hintActive || gameState.solved) return;
+  const row = Number(event.currentTarget.dataset.row);
+  const col = Number(event.currentTarget.dataset.col);
+  highlightNeighbors(row, col, true);
 }
 
-function onCellLeave() {
-  hideMovePreview();
+function onCellLeave(event) {
+  if (!gameState.hintActive || gameState.solved) return;
+  const row = Number(event.currentTarget.dataset.row);
+  const col = Number(event.currentTarget.dataset.col);
+  highlightNeighbors(row, col, false);
 }
 
-function showMovePreview(toX, toY) {
-  const rect = elements.board.getBoundingClientRect();
-  const wrapRect = elements.boardWrap.getBoundingClientRect();
-  const cellSize = rect.width / (gameState.N + 1);
-  const fromX = gameState.pos.x;
-  const fromY = gameState.pos.y;
-  const fromCx = fromX * cellSize + cellSize / 2 + (rect.left - wrapRect.left);
-  const fromCy = (gameState.N - fromY) * cellSize + cellSize / 2 + (rect.top - wrapRect.top);
-  const toCx = toX * cellSize + cellSize / 2 + (rect.left - wrapRect.left);
-  const toCy = (gameState.N - toY) * cellSize + cellSize / 2 + (rect.top - wrapRect.top);
-  const dx = toCx - fromCx;
-  const dy = toCy - fromCy;
-  const length = Math.hypot(dx, dy);
-  const angle = Math.atan2(dy, dx) * (180 / Math.PI);
-
-  elements.movePreview.style.width = `${length}px`;
-  elements.movePreview.style.transform = `translate(${fromCx}px, ${fromCy}px) rotate(${angle}deg)`;
-  elements.movePreview.classList.add("active");
+function highlightNeighbors(row, col, active) {
+  const offsets = [
+    [0, 0],
+    [-1, 0],
+    [1, 0],
+    [0, -1],
+    [0, 1],
+  ];
+  offsets.forEach(([dr, dc]) => {
+    const targetRow = row + dr;
+    const targetCol = col + dc;
+    if (targetRow < 0 || targetCol < 0 || targetRow >= gameState.gridSize || targetCol >= gameState.gridSize) return;
+    const idx = getIndex(targetRow, targetCol);
+    const cell = elements.board.children[idx];
+    cell.classList.toggle("preview", active);
+  });
 }
 
-function hideMovePreview() {
-  elements.movePreview.classList.remove("active");
+function handleReset() {
+  setupPuzzle();
 }
 
-function commitMove(actor, toX, toY) {
-  gameState.history.push({ ...gameState.pos });
-  const prev = { ...gameState.pos };
-  gameState.pos = { x: toX, y: toY };
-
-  gameState.ui.lastMoveText = `${actor === "player" ? "You" : "Bot"}: (${prev.x},${prev.y}) → (${toX},${toY})`;
-  positionToken(true, actor === "bot");
-  playTone(actor === "bot" ? 360 : 520, 0.1);
-
-  const reachedOrigin = toX === 0 && toY === 0;
-  if (reachedOrigin) {
-    endRound(actor);
-    return;
-  }
-
-  if (actor === "player") {
-    const decisionTime = Date.now() - gameState.ui.turnStart;
-    gameState.playerModel = BotEngine.updatePlayerModel(gameState.playerModel, {
-      toX,
-      toY,
-      grundyData: gameState.grundyData,
-      decisionTime,
-      misclicks: gameState.ui.misclicks,
-    });
-    gameState.directorState.skill = gameState.playerModel.skill;
-
-    if (mode === "practice") {
-      const g = gameState.grundyData.grundy[toX][toY];
-      elements.insightTip.textContent = g === 0 ? "Cold position!" : `Hot position (g=${g}).`;
-    }
-
-    gameState.phase = "bot_turn";
-    gameState.ui.turnStart = Date.now();
-    gameState.ui.misclicks = 0;
-    updateLegalMoves();
-    updateHud();
-    runBotTurn();
-  } else {
-    gameState.phase = "player_turn";
-    gameState.ui.turnStart = Date.now();
-    updateLegalMoves();
-    updateHud();
-  }
+function handleNewPuzzle() {
+  setupPuzzle({ incrementIndex: true });
 }
 
-function runBotTurn() {
-  if (gameState.phase !== "bot_turn") return;
-  elements.boardWrap.style.pointerEvents = "none";
-
-  const skill = gameState.playerModel.skill ?? 0.5;
-  const minDelay = skill < 0.35 ? 700 : skill < 0.7 ? 420 : 250;
-  const maxDelay = skill < 0.35 ? 1200 : skill < 0.7 ? 820 : 520;
-  const delay = Math.floor(minDelay + Math.random() * (maxDelay - minDelay));
-
-  setTimeout(() => {
-    const move = BotEngine.getBotMove({
-      N: gameState.N,
-      x: gameState.pos.x,
-      y: gameState.pos.y,
-      grundy: gameState.grundyData.grundy,
-      playerModel: gameState.playerModel,
-      roundIndex: gameState.roundIndex,
-    });
-
-    if (move) {
-      commitMove("bot", move.toX, move.toY);
-    }
-
-    elements.boardWrap.style.pointerEvents = "auto";
-  }, delay);
+function handleContinue() {
+  setupPuzzle({ incrementIndex: mode === "challenge" });
 }
-
-function endRound(winner) {
-  gameState.phase = "round_over";
-  if (winner === "player") {
-    gameState.score.player += 1;
-  } else {
-    gameState.score.bot += 1;
-  }
-
-  elements.overlayTitle.textContent = winner === "player" ? "You Win" : "Bot Wins";
-  elements.overlayText.textContent = winner === "player" ? "You cracked the pattern." : "The queen reaches the origin.";
-  elements.overlay.classList.add("visible");
-  updateHud();
-}
-
-function nextRound() {
-  elements.overlay.classList.remove("visible");
-  if (mode === "match" && gameState.roundIndex >= 5) {
-    resetMatch();
-    return;
-  }
-
-  gameState.roundIndex += 1;
-  startRound();
-}
-
-function resetMatch() {
-  gameState.roundIndex = 1;
-  gameState.score = { player: 0, bot: 0 };
-  gameState.playerModel = { skill: 0.5 };
-  gameState.directorState = { skill: 0.5 };
-  elements.overlayTitle.textContent = "Match Reset";
-  elements.overlayText.textContent = "New duel. Bot still goes first.";
-  elements.overlay.classList.remove("visible");
-  startRound();
-}
-
-function undoMove() {
-  if (mode !== "practice" || gameState.history.length === 0 || gameState.phase !== "player_turn") return;
-  const prev = gameState.history.pop();
-  gameState.pos = { ...prev };
-  gameState.ui.lastMoveText = "Undo: position restored.";
-  positionToken(true);
-  updateLegalMoves();
-  updateHud();
-}
-
-function onResize() {
-  positionToken(false);
-}
-
-elements.undoBtn.addEventListener("click", undoMove);
-
-window.addEventListener("resize", onResize);
-
-elements.continueBtn.addEventListener("click", nextRound);
 
 elements.soundBtn.addEventListener("click", () => {
   settings.sound = !settings.sound;
@@ -409,6 +307,14 @@ elements.contrastBtn.addEventListener("click", () => {
   saveSettings();
 });
 
-elements.resetBtn.addEventListener("click", resetMatch);
+elements.resetBtn.addEventListener("click", handleReset);
 
-startRound();
+elements.newBtn.addEventListener("click", handleNewPuzzle);
+
+elements.continueBtn.addEventListener("click", handleContinue);
+
+elements.hintBtn.addEventListener("click", () => {
+  toggleHints(!gameState.hintActive);
+});
+
+setupPuzzle();
